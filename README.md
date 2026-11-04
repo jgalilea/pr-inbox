@@ -121,7 +121,7 @@ Clicking a row expands the detail. Empty sections are hidden. It shows, in this 
 ## Settings and multiple accounts
 
 The gear button opens the settings:
-- **GitHub accounts**: for each account you see its name, color, whether it is enabled, where the token comes from, the REST and GraphQL API endpoints and the quota left on each.
+- **GitHub accounts**: for each account you see its name, color, whether it is enabled, where the token comes from, the REST and GraphQL API endpoints and the quota left on each. The only account can't be removed: add the new one first.
 - **Add account**:
   - **From the GitHub CLI (recommended):** sign in with `gh auth login`, which supports several accounts, then click "Add" in Settings. The app asks `gh` for the token each time and doesn't store it.
   - **With a personal token:** a *classic* token with the `repo`, `read:org` and `notifications` scopes. It is stored in the GNOME keyring. It also works for GitHub Enterprise by setting the server.

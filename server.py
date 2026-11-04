@@ -28,7 +28,7 @@ from pathlib import Path
 import accounts as acc
 from github import LIGHT_FRAGMENT, GitHub, endpoints
 
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 HERE = Path(__file__).resolve().parent
 STATIC = HERE / "static"
 DATA_DIR = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share")) / "pr-inbox"

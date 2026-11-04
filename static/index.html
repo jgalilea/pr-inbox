@@ -96,6 +96,7 @@ input[type=search] { background: var(--panel-2); border: 1px solid var(--border)
 .acct-row .who-l { color: var(--muted); font-size: 12px; }
 .btn { border: 1px solid var(--border); background: var(--panel); border-radius: 6px; padding: 3px 10px; font-size: 12px; }
 .btn:hover { background: var(--panel-2); }
+.btn:disabled { background: var(--panel); opacity: .5; cursor: not-allowed; }
 .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
 .btn.danger { color: var(--red); }
 .btn.danger.armed { background: var(--red); color: #fff; border-color: var(--red); }
@@ -685,6 +686,7 @@ function renderSettings() {
   if (!settings.open || !S) return;
   const body = document.getElementById("settings-body");
   if (body.contains(document.activeElement) && document.activeElement.matches("input[type=text], input[type=password]")) return;  // don't clobber typing
+  const onlyAccount = S.accounts.length === 1;
   const cards = S.accounts.map(a => `<div class="card acct-card" style="--acc:${esc(a.color)}" data-acct="${esc(a.id)}">
       <div class="acct-row">
         <input type="color" value="${esc(a.color)}" data-acct-color title="Account color">
@@ -692,7 +694,7 @@ function renderSettings() {
         <span class="who-l">${esc(a.login)} · ${esc(a.host)}</span>
         <span class="spacer"></span>
         <label class="hint"><input type="checkbox" data-acct-enabled ${a.enabled ? "checked" : ""}> Enabled</label>
-        <button class="btn danger ${settings.armed === a.id ? "armed" : ""}" data-acct-remove>${settings.armed === a.id ? "Sure? Remove" : "Remove"}</button>
+        <button class="btn danger ${settings.armed === a.id ? "armed" : ""}" data-acct-remove ${onlyAccount ? `disabled title="Add another account before removing this one"` : ""}>${settings.armed === a.id ? "Sure? Remove" : "Remove"}</button>
       </div>
       <div class="status-l ${a.error ? "err" : ""}">${!a.enabled ? `${ic("skip", "mut")} Disabled: not synced and its PRs are hidden`
         : a.error ? `${ic("x-circle-fill", "bad")} ${esc(a.error)}` : a.syncing ? `${ic("sync", "mut")} Syncing…` : `${ic("check-circle-fill", "ok")} Connected · last sync ${a.last_sync ? fmt(a.last_sync) : "pending"}`}</div>
@@ -740,6 +742,7 @@ function renderSettings() {
     </div>
     <div class="sect"><h3>GitHub accounts</h3>
       <div style="display:flex;flex-direction:column;gap:10px">${cards}</div>
+      ${onlyAccount ? `<p class="hint">This is your only account. To replace it, add the new one first; then you can remove this one.</p>` : ""}
       <p class="hint">With several active accounts, each PR gets a stripe and a tag in its account color, and the Account filter appears.
         If two accounts see the same PR, it shows once per account.</p>
     </div>
@@ -799,7 +802,10 @@ function quotaEstimate(poll) {
 }
 async function settingsPost(path, body, okMsg) {
   try { S = await api(path, body); lastPayload = ""; settings.msg = ""; render(); if (okMsg) toast(okMsg); }
-  catch (e) { settings.msg = e.message; }
+  catch (e) {
+    if (path === "/api/accounts/add") settings.msg = e.message;  // shown next to the add forms
+    else toast(e.message, 5000, null, "alert");
+  }
   renderSettings();
 }
 

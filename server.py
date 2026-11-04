@@ -28,7 +28,7 @@ from pathlib import Path
 import accounts as acc
 from github import LIGHT_FRAGMENT, GitHub, endpoints
 
-VERSION = "1.0.1"
+VERSION = "1.0.2"
 HERE = Path(__file__).resolve().parent
 STATIC = HERE / "static"
 DATA_DIR = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share")) / "pr-inbox"
@@ -65,7 +65,7 @@ NOTIFY_LABELS = {"comment": "New comment", "review": "Review requested", "change
 DEFAULT_QUIET = {"enabled": False, "from": "19:00", "to": "09:00", "weekends": True}
 ACCOUNT_COLORS = ["#6366f1", "#db2777", "#0d9488", "#ea580c", "#a16207", "#0284c7", "#65a30d", "#9333ea"]
 # Per-account meta keys (stored as "<key>:<account id>").
-ACCOUNT_META = ("last_modified", "search_keys", "review_keys", "notified", "teams", "teams_at", "me", "last_sync")
+ACCOUNT_META = ("last_modified", "search_keys", "review_keys", "notified", "teams", "teams_at", "me", "last_sync", "gh_user")
 FAILED_CHECK = {"FAILURE", "TIMED_OUT", "STARTUP_FAILURE", "ACTION_REQUIRED", "ERROR"}
 RUNNING_CHECK = {"IN_PROGRESS", "QUEUED", "PENDING", "EXPECTED", "WAITING", "REQUESTED"}
 HOST_RE = re.compile(r"[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*(:\d{1,5})?")
@@ -541,10 +541,41 @@ class Account:
     @property
     def gh(self):
         if self._gh is None:
-            host, login = self.cfg["host"], self.login
-            provider = (lambda: acc.gh_token(host, login)) if self.cfg["source"] == "gh" else (lambda: acc.keyring_load(self.id))
-            self._gh = GitHub(host, provider)
+            provider = self._gh_token if self.cfg["source"] == "gh" else (lambda: acc.keyring_load(self.id))
+            self._gh = GitHub(self.cfg["host"], provider)
         return self._gh
+
+    def _gh_token(self):
+        """`gh` files tokens under the login it saw at `gh auth login`, which a GitHub rename doesn't update.
+        `gh_user` keeps that name when it differs from the real login."""
+        host, name = self.cfg["host"], self.meta("gh_user") or self.login
+        try:
+            return acc.gh_token(host, name)
+        except RuntimeError:
+            if name == self.login:
+                raise
+        token = acc.gh_token(host, self.login)  # `gh` was logged in again, under the new name
+        self.set_meta("gh_user", None)
+        return token
+
+    def refresh_login(self):
+        """Follow a GitHub rename. A stale login is silent: searching for it finds nothing, without an error,
+        and classify() stops recognising the user. The account id stays, since every stored key uses it."""
+        login = self.gh.viewer()
+        if login == self.login:
+            return
+        if not LOGIN_RE.fullmatch(login):
+            raise ValueError(f"Unexpected login: {login}")
+        old = self.login
+        print(f"{now_iso()} {self.id} is now {login} (was {old})", flush=True)
+        if self.cfg["source"] == "gh" and not self.meta("gh_user"):
+            self.set_meta("gh_user", old)
+        self.store.x("UPDATE accounts SET login=? WHERE id=?", login, self.id)
+        self.store.x("UPDATE accounts SET label=? WHERE id=? AND label=?", login, self.id, old)
+        if self.cfg["label"] == old:
+            self.cfg["label"] = login
+        self.cfg["login"] = self.login = login
+        self.set_meta("teams_at", None)  # teams are looked up by login
 
     def meta(self, k, default=None):
         return self.store.get(f"{k}:{self.id}", default)
@@ -579,6 +610,9 @@ class Account:
 
     def _sync(self):
         st, gh = self.store, self.gh
+        full = self.last_full is None or time.time() - self.last_full >= FULL_REFRESH
+        if full:
+            self.refresh_login()  # before the searches, which use it
         threads, lm, _ = gh.notifications(_since(), self.meta("last_modified"))
         changed = set()
         if threads is not None:
@@ -614,7 +648,6 @@ class Account:
         must = [k for k in relevant if k not in cached or k in changed]
         maybe = [k for k in relevant if k in cached and k not in changed
                  and (k in search or (cached[k] or {}).get("state") == "OPEN")]
-        full = self.last_full is None or time.time() - self.last_full >= FULL_REFRESH
         if maybe and not full:
             light = gh.pull_requests([repo_key(k) for k in maybe], batch=30, fragment=LIGHT_FRAGMENT)
             maybe = [k for k in maybe if fingerprint(light.get(repo_key(k))) != fingerprint(cached[k])]
@@ -660,7 +693,7 @@ class Account:
                 "failures": self.failures, "last_failure": self.last_failure, "cost": self.cost,
                 "last_sync": self.meta("last_sync"), "last_attempt": self.last_attempt,
                 "rate": self._gh.rate if self._gh else {}, "scopes": self._gh.scopes if self._gh else None,
-                "endpoints": {"rest": rest, "graphql": graphql}}
+                "endpoints": {"rest": rest, "graphql": graphql}, "gh_user": self.meta("gh_user") or self.login}
 
 
 class Inbox:
@@ -684,10 +717,15 @@ class Inbox:
         aid = self._insert_account("gh", a["host"], a["login"], a["login"])
         self.store.migrate_single_account(aid)
 
+    def _check_new_account(self, host, login):
+        """An account keeps its id after a rename, so the id alone doesn't catch a duplicate."""
+        if self.store.q("SELECT 1 FROM accounts WHERE id=? OR (host=? AND lower(login)=?)",
+                        f"{login}@{host}".lower(), host, login.lower()):
+            raise ValueError(f"Account {login} ({host}) is already added")
+
     def _insert_account(self, source, host, login, label):
         aid = f"{login}@{host}".lower()
-        if self.store.q("SELECT 1 FROM accounts WHERE id=?", aid):
-            raise ValueError(f"Account {login} ({host}) is already added")
+        self._check_new_account(host, login)
         n = len(self.store.q("SELECT id FROM accounts"))
         self.store.x("INSERT INTO accounts VALUES(?,?,?,?,?,?,1,?)", aid, source, host, login, label,
                      ACCOUNT_COLORS[n % len(ACCOUNT_COLORS)], n)
@@ -734,7 +772,8 @@ class Inbox:
     # accounts ----------------------------------------------------------
 
     def available_gh_accounts(self):
-        added = {(a.cfg["host"], a.login.lower()) for a in self.accounts.values()}
+        added = {(a.cfg["host"], name.lower()) for a in self.accounts.values()
+                 for name in (a.login, a.meta("gh_user") or a.login)}
         return [a for a in acc.gh_accounts() if (a["host"], a["login"].lower()) not in added]
 
     def add_account(self, body):
@@ -742,8 +781,12 @@ class Inbox:
             host, login = body["host"], body["login"]
             if not any(a["host"] == host and a["login"] == login for a in acc.gh_accounts()):
                 raise ValueError(f"{login} ({host}) is not logged in with gh")
-            GitHub(host, lambda: acc.gh_token(host, login)).viewer()  # fails early if gh can't provide a token
-            aid = self._insert_account("gh", host, login, body.get("label") or login)
+            real = GitHub(host, lambda: acc.gh_token(host, login)).viewer()  # fails early if gh can't provide a token
+            if not LOGIN_RE.fullmatch(real):
+                raise ValueError(f"Unexpected login: {real}")
+            aid = self._insert_account("gh", host, real, body.get("label") or real)
+            if real != login:  # renamed since `gh auth login`
+                self.store.set(f"gh_user:{aid}", login)
         elif body.get("source") == "token":
             host = (body.get("host") or "github.com").strip().lower().removeprefix("https://").strip("/") or "github.com"
             if not HOST_RE.fullmatch(host):
@@ -761,6 +804,7 @@ class Inbox:
                 missing.append("notifications")
             if missing:
                 raise ValueError("The token is missing scopes: " + ", ".join(missing))
+            self._check_new_account(host, login)
             aid = f"{login}@{host}".lower()
             acc.keyring_store(aid, token)
             self._insert_account("token", host, login, body.get("label") or login)

@@ -76,6 +76,7 @@ Environment variables:
   - **`Account`:** one per GitHub account. Each one owns a `github.GitHub` client.
     - Every key is `"<account_id>|owner/repo#123"`, so the same PR seen by two accounts appears twice.
     - Per-account metadata is stored in `meta` under keys prefixed with the account.
+    - `accounts.login` is the real GitHub login: `refresh_login()` updates it from `viewer` on each full sync, before the searches, because searching for an old login finds nothing without an error. The account `id` never changes after a rename, so don't parse the login out of it. `gh` keeps the login it saw at `gh auth login`, so that name goes in the `gh_user` meta key when it differs (`_gh_token()`).
     - `_sync()` does the following:
       1. fetches REST notifications (`participating=true`, using `If-Modified-Since`, so a 304 costs no quota);
       2. runs three GraphQL searches, whose keys go to `search_keys`:

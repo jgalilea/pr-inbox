@@ -369,6 +369,7 @@ class SyncTest(InboxTestCase):
         a = self.inbox.accounts["me@github.com"]
         gh = mock.MagicMock()
         gh.notifications.return_value = ([], None, 60)
+        gh.viewer.return_value = "me"
         gh.search_prs.side_effect = lambda q: ["o/r#331"] if "reviewed-by:me " in q else []
         gh.pull_requests.return_value = {"o/r#331": pr_node(author="bob", reviews=[review("me", "APPROVED")])}
         gh.my_teams.return_value = []
@@ -385,12 +386,120 @@ class SyncTest(InboxTestCase):
         a = self.inbox.accounts[account]
         gh = a._gh = mock.MagicMock()
         gh.rate = {}
+        gh.viewer.return_value = a.login
         gh.notifications.return_value = (None, None, 60)  # 304: no new notifications
         gh.search_prs.side_effect = lambda q: ["o/r#5"] if "author:" in q else []
         node = node or pr_node(author="me")
         gh.pull_requests.side_effect = lambda keys, batch=10, fragment=None: {k: node for k in keys}
         gh.my_teams.return_value = []
         return a, gh
+
+    def test_rename_is_followed_before_searching(self):
+        a, gh = self.fake_gh()
+        gh.viewer.return_value = "new-me"
+        self.store.set("teams_at:me@github.com", server.now_iso())
+        a._sync()
+        queries = [c.args[0] for c in gh.search_prs.call_args_list]
+        self.assertTrue(queries and all("new-me" in q for q in queries), queries)
+        self.assertEqual(self.store.q("SELECT login, label FROM accounts WHERE id='me@github.com'")[0]["login"], "new-me")
+        self.assertEqual(a.public()["login"], "new-me")
+        self.assertEqual(a.public()["gh_user"], "me")  # what `gh auth token --user` still needs
+        self.assertEqual(a.public()["id"], "me@github.com")  # stored keys depend on it
+        gh.my_teams.assert_called_once_with("new-me")
+
+    def test_rename_recognises_the_user_in_classify(self):
+        a, gh = self.fake_gh(node=pr_node(author="new-me"))
+        gh.viewer.return_value = "new-me"
+        a._sync()
+        self.assertTrue(next(i for i in self.inbox.items() if i["key"] == "me@github.com|o/r#5")["mine"])
+
+    def test_rename_updates_the_default_label_only(self):
+        a, gh = self.fake_gh()
+        gh.viewer.return_value = "new-me"
+        self.store.x("UPDATE accounts SET label='Work' WHERE id='me@github.com'")
+        self.inbox.reload_accounts()
+        a._sync()
+        self.assertEqual(a.cfg["label"], "Work")
+        self.assertEqual(self.store.q("SELECT label FROM accounts WHERE id='me@github.com'")[0]["label"], "Work")
+        a, gh = self.fake_gh("m_e@github.com")
+        gh.viewer.return_value = "new-m_e"
+        a._sync()
+        self.assertEqual(a.cfg["label"], "new-m_e")
+        self.assertEqual(self.store.q("SELECT label FROM accounts WHERE id='m_e@github.com'")[0]["label"], "new-m_e")
+
+    def test_login_is_only_checked_on_full_syncs(self):
+        a, gh = self.fake_gh()
+        a._sync()
+        a._sync()
+        gh.viewer.assert_called_once()
+
+    def test_unexpected_login_is_not_used_in_searches(self):
+        a, gh = self.fake_gh()
+        gh.viewer.return_value = "x author:someone"
+        with self.assertRaises(ValueError):
+            a._sync()
+        gh.search_prs.assert_not_called()
+        self.assertEqual(a.login, "me")
+
+    def test_gh_token_uses_the_name_gh_knows(self):
+        a = self.inbox.accounts["me@github.com"]
+        a.login = "new-me"
+        a.set_meta("gh_user", "me")
+        with mock.patch.object(server.acc, "gh_token", return_value="t") as token:
+            self.assertEqual(a._gh_token(), "t")
+        token.assert_called_once_with("github.com", "me")
+        self.assertEqual(a.meta("gh_user"), "me")
+
+    def test_gh_token_follows_a_new_gh_login(self):
+        a = self.inbox.accounts["me@github.com"]
+        a.login = "new-me"
+        a.set_meta("gh_user", "me")
+        def token(host, login):
+            if login == "me":
+                raise RuntimeError("no session")
+            return "t"
+        with mock.patch.object(server.acc, "gh_token", side_effect=token):
+            self.assertEqual(a._gh_token(), "t")
+        self.assertIsNone(a.meta("gh_user"))
+
+    def test_gh_token_error_comes_through_without_a_rename(self):
+        a = self.inbox.accounts["me@github.com"]
+        with mock.patch.object(server.acc, "gh_token", side_effect=RuntimeError("no session")) as token:
+            with self.assertRaises(RuntimeError):
+                a._gh_token()
+        token.assert_called_once()
+
+    def test_renamed_account_is_not_offered_again(self):
+        a, gh = self.fake_gh()
+        gh.viewer.return_value = "new-me"
+        a._sync()
+        found = [{"host": "github.com", "login": n, "active": False} for n in ("me", "new-me", "third")]
+        with mock.patch.object(server.acc, "gh_accounts", return_value=found):
+            self.assertEqual([g["login"] for g in self.inbox.available_gh_accounts()], ["third"])
+
+    def test_adding_a_renamed_gh_session_stores_the_real_login(self):
+        found = [{"host": "github.com", "login": "stale", "active": False}]
+        client = mock.MagicMock()
+        client.viewer.return_value = "fresh"
+        with mock.patch.object(server.acc, "gh_accounts", return_value=found), \
+                mock.patch.object(server, "GitHub", return_value=client):
+            self.inbox.add_account({"source": "gh", "host": "github.com", "login": "stale"})
+        a = self.inbox.accounts["fresh@github.com"]
+        self.assertEqual((a.login, a.cfg["label"], a.meta("gh_user")), ("fresh", "fresh", "stale"))
+
+    def test_duplicate_of_a_renamed_account_is_refused(self):
+        a, gh = self.fake_gh()
+        gh.viewer.return_value = "new-me"
+        a._sync()
+        with self.assertRaisesRegex(ValueError, "already added"):
+            self.inbox._insert_account("gh", "github.com", "New-Me", "x")
+
+    def test_removing_an_account_forgets_its_gh_user(self):
+        a, gh = self.fake_gh()
+        gh.viewer.return_value = "new-me"
+        a._sync()
+        self.inbox.remove_account("me@github.com")
+        self.assertIsNone(self.store.get("gh_user:me@github.com"))
 
     def full_fetches(self, gh):
         return [c for c in gh.pull_requests.call_args_list if c.kwargs.get("fragment") is None]

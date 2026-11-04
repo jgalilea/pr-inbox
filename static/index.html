@@ -699,7 +699,7 @@ function renderSettings() {
       <div class="status-l ${a.error ? "err" : ""}">${!a.enabled ? `${ic("skip", "mut")} Disabled: not synced and its PRs are hidden`
         : a.error ? `${ic("x-circle-fill", "bad")} ${esc(a.error)}` : a.syncing ? `${ic("sync", "mut")} Syncing…` : `${ic("check-circle-fill", "ok")} Connected · last sync ${a.last_sync ? fmt(a.last_sync) : "pending"}`}</div>
       <div class="hint">Token: ${a.source === "gh"
-        ? `from the GitHub CLI (<code>gh auth token --user ${esc(a.login)}</code>); the app does not store it`
+        ? `from the GitHub CLI (<code>gh auth token --user ${esc(a.gh_user)}</code>); the app does not store it`
         : "personal token stored in the GNOME keyring"}${a.scopes ? ` · scopes: ${esc(a.scopes.join(", "))}` : ""}</div>
       <table class="api">
         <tr><th>API</th><th>Endpoint</th><th>Hourly quota</th></tr>

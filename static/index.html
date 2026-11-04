@@ -1,0 +1,1294 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PR Inbox</title>
+<link rel="icon" href="/static/icon.svg">
+<script>
+  try { const t = JSON.parse(localStorage.getItem("prefs"))?.theme; if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch {}
+</script>
+<style>
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --panel-2: #f0f2f5; --border: #dfe3e8; --text: #1c2128; --muted: #636c76;
+  --accent: #3b6fd8; --red: #cf222e; --red-bg: #ffebe9; --orange: #bc4c00; --orange-bg: #fff1e5;
+  --green: #1a7f37; --green-bg: #dafbe1; --gray-bg: #eaeef2; --purple: #8250df; --purple-bg: #fbefff;
+  --yellow: #9a6700; --yellow-bg: #fff8c5;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1216; --panel: #161b22; --panel-2: #1c2129; --border: #2d333b; --text: #e6edf3; --muted: #8b949e;
+    --accent: #6e9bf5; --red: #ff7b72; --red-bg: #3d1517; --orange: #ffa657; --orange-bg: #3a2311;
+    --green: #56d364; --green-bg: #12301b; --gray-bg: #262c36; --purple: #c297ff; --purple-bg: #2c1f43;
+    --yellow: #e3b341; --yellow-bg: #332a0f;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1216; --panel: #161b22; --panel-2: #1c2129; --border: #2d333b; --text: #e6edf3; --muted: #8b949e;
+  --accent: #6e9bf5; --red: #ff7b72; --red-bg: #3d1517; --orange: #ffa657; --orange-bg: #3a2311;
+  --green: #56d364; --green-bg: #12301b; --gray-bg: #262c36; --purple: #c297ff; --purple-bg: #2c1f43;
+  --yellow: #e3b341; --yellow-bg: #332a0f;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text);
+  font: 13px/1.4 system-ui, -apple-system, "Segoe UI", Ubuntu, sans-serif; }
+a { color: inherit; text-decoration: none; }
+a:hover { text-decoration: underline; }
+button { font: inherit; color: inherit; cursor: pointer; }
+
+header { position: sticky; top: 0; z-index: 5; background: var(--panel); border-bottom: 1px solid var(--border);
+  padding: 10px var(--gutter) 8px; display: flex; flex-direction: column; gap: 8px; }
+.row1 { display: grid; grid-template-columns: 1fr minmax(220px, 380px) 1fr; align-items: center; gap: 12px; }
+.row1 .hl, .row1 .hr { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.row1 .hr { justify-content: flex-end; gap: 8px; }
+.row1 #q { width: 100%; }
+.brand { font-weight: 650; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+.brand img { width: 20px; height: 20px; }
+.tabs { display: flex; gap: 2px; background: var(--panel-2); border-radius: 8px; padding: 2px; }
+.tabs button { border: 0; background: none; padding: 4px 10px; border-radius: 6px; color: var(--muted); }
+.tabs button.on { background: var(--panel); color: var(--text); box-shadow: 0 1px 2px #0002; font-weight: 600; }
+.tabs .n { font-size: 11px; opacity: .75; margin-left: 4px; }
+.spacer { flex: 1; }
+input[type=search] { background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px; padding: 5px 9px;
+  color: var(--text); width: 220px; font: inherit; }
+.iconbtn { border: 1px solid var(--border); background: var(--panel); border-radius: 6px; padding: 4px 8px; color: var(--muted); display: inline-flex; }
+/* Octicons: they take the text color; .ok/.bad/.wait/.mut give the GitHub status colors. */
+.oi { width: 14px; height: 14px; fill: currentColor; flex: none; vertical-align: -2px; }
+.oi.ok { color: var(--green); } .oi.bad { color: var(--red); } .oi.wait { color: var(--yellow); } .oi.mut { color: var(--muted); }
+.oi.big { width: 18px; height: 18px; vertical-align: -4px; }
+.iconbtn:hover { background: var(--panel-2); }
+.conn { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); border: 1px solid var(--border);
+  border-radius: 999px; padding: 3px 10px; background: var(--panel); cursor: pointer; white-space: nowrap;
+  width: 200px; justify-content: flex-start; overflow: hidden; }
+.conn .txt { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.conn .dot { flex: none; }
+.conn:hover { background: var(--panel-2); }
+.conn .dot { width: 8px; height: 8px; }
+.conn.ok .dot { background: var(--green); } .conn.warn .dot { background: var(--yellow); } .conn.err .dot { background: var(--red); }
+.conn.err { color: var(--red); border-color: var(--red); }
+.conn.syncing .dot { background: var(--accent); animation: pulse 1s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .3; } }
+/* Accounts: a colour per account (stripe on each PR + badge), only when more than one is active. */
+.acct-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; border-radius: 4px;
+  padding: 1px 6px; color: #fff; background: var(--acc); white-space: nowrap; flex: none; }
+.multi .pr { box-shadow: inset 3px 0 0 var(--acc); }
+.multi details.repo > summary { box-shadow: inset 3px 0 0 var(--acc); }
+
+/* Settings drawer */
+#backdrop { position: fixed; inset: 0; background: #0005; z-index: 30; }
+#settings { position: fixed; top: 0; right: 0; bottom: 0; width: min(640px, 100vw); background: var(--bg); z-index: 31;
+  border-left: 1px solid var(--border); box-shadow: -8px 0 30px #0003; display: flex; flex-direction: column; }
+.hidden { display: none !important; }
+.drawer-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px;
+  border-bottom: 1px solid var(--border); background: var(--panel); font-size: 15px; }
+#settings-body { overflow: auto; padding: 14px 16px 30px; display: flex; flex-direction: column; gap: 14px; }
+.sect h3 { margin: 4px 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; display: flex;
+  flex-direction: column; gap: 8px; }
+.acct-card { border-left: 4px solid var(--acc); }
+.acct-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.acct-row input[type=text], .card input[type=text], .card input[type=password] { background: var(--panel-2); border: 1px solid var(--border);
+  border-radius: 6px; padding: 4px 8px; color: var(--text); font: inherit; }
+.acct-row input[type=color] { width: 28px; height: 24px; border: 1px solid var(--border); border-radius: 6px; padding: 0; background: none; }
+.acct-row .who-l { color: var(--muted); font-size: 12px; }
+.btn { border: 1px solid var(--border); background: var(--panel); border-radius: 6px; padding: 3px 10px; font-size: 12px; }
+.btn:hover { background: var(--panel-2); }
+.btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn.danger { color: var(--red); }
+.btn.danger.armed { background: var(--red); color: #fff; border-color: var(--red); }
+.status-l { font-size: 12px; display: flex; align-items: center; gap: 6px; }
+.status-l.err { color: var(--red); }
+table.api { width: 100%; border-collapse: collapse; font-size: 12px; }
+table.api th { text-align: left; color: var(--muted); font-weight: 500; padding: 3px 4px; border-bottom: 1px solid var(--border); }
+table.api td { padding: 5px 4px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+table.api code { font-size: 11.5px; background: var(--panel-2); padding: 1px 5px; border-radius: 4px; user-select: all; }
+.bar { width: 110px; height: 6px; background: var(--gray-bg); border-radius: 3px; overflow: hidden; display: inline-block; vertical-align: middle; }
+.bar i { display: block; height: 100%; background: var(--green); }
+.bar.mid i { background: var(--yellow); } .bar.low i { background: var(--red); }
+.hint { font-size: 12px; color: var(--muted); line-height: 1.5; }
+.hint code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; }
+.notify-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; font-size: 12.5px; margin: 4px 0 8px; }
+.notify-grid label { display: flex; gap: 6px; align-items: center; }
+input[type=time] { font: inherit; font-size: 12px; padding: 1px 4px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--panel); color: var(--text); }
+.kbd-help { display: flex !important; flex-direction: row !important; flex-wrap: wrap; gap: 6px 14px; }
+kbd { font: 11px ui-monospace, monospace; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 4px;
+  padding: 0 4px; background: var(--panel-2); color: var(--text); }
+.form-grid { display: grid; grid-template-columns: 90px 1fr; gap: 6px 10px; align-items: center; font-size: 12.5px; }
+.toast { position: fixed; bottom: 14px; right: 16px; background: var(--panel); color: var(--text); border: 1px solid var(--border);
+  border-left: 3px solid var(--accent); padding: 5px 12px; border-radius: 6px; font-size: 12px; z-index: 50; opacity: 0; transform: translateY(4px);
+  transition: opacity .2s, transform .2s; pointer-events: none; box-shadow: 0 2px 8px #0001; }
+.toast.show { opacity: 1; transform: none; pointer-events: auto; }
+.toast button { border: 0; background: none; color: var(--accent); font-weight: 600; padding: 0 0 0 8px; }
+.why { grid-column: 1 / -1; color: var(--muted); }
+.why b { color: var(--text); font-weight: 600; }
+.spin { display: inline-block; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.filters { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.chip { border: 1px solid var(--border); background: var(--panel); border-radius: 999px; padding: 2px 9px; font-size: 12px;
+  display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.chip.on { outline: 2px solid var(--accent); outline-offset: -1px; }
+.chip .n { font-weight: 600; }
+.chip.zero { opacity: .45; }
+.fsep { width: 1px; height: 18px; background: var(--border); margin: 0 4px; }
+.flabel { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.chip.dd-btn { width: 178px; justify-content: space-between; padding: 3px 10px; }
+.chip.dd-btn .txt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; text-align: left; }
+.chip.dd-btn .cnt { flex: none; font-size: 11px; font-weight: 600; background: var(--accent); color: var(--panel);
+  border-radius: 999px; padding: 0 6px; }
+.chip.dd-btn .caret { flex: none; color: var(--muted); }
+.chip.dd-btn.active { border-color: var(--accent); color: var(--accent); }
+.chip.dd-btn.teams { width: auto; }
+.clear { border: 0; background: none; color: var(--accent); font-size: 12px; padding: 2px 4px; }
+.clear.hidden { visibility: hidden; }
+#ddpanel { position: fixed; z-index: 20; background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: 0 6px 20px #0003; padding: 6px; width: 320px; max-height: 460px; display: none; flex-direction: column; gap: 6px; }
+#ddpanel.show { display: flex; }
+#ddpanel input[type=search] { width: 100%; }
+.dd-list { overflow: auto; display: flex; flex-direction: column; }
+.dd-list label { display: flex; gap: 8px; align-items: center; padding: 4px 8px; border-radius: 5px; cursor: pointer; }
+/* Room for the 4px avatar rings, so neighbouring rows and the scroll edge don't cut them. */
+.dd-list .avw, .detail li > .avw { margin: 3px; }
+.dd-list label:hover { background: var(--panel-2); }
+.dd-list .n { margin-left: auto; color: var(--muted); font-size: 11px; }
+.dd-list .lbl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dd-list .org { color: var(--muted); }
+.dd-actions { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); padding: 0 4px; }
+.dd-actions button { border: 0; background: none; color: var(--accent); padding: 0; }
+
+/* Full width with comfortable side margins that grow on big screens. */
+:root { --gutter: clamp(16px, 3vw, 48px); }
+main { padding: 12px var(--gutter) 40px; }
+.empty { text-align: center; color: var(--muted); padding: 60px 0; font-size: 14px; }
+.banner { display: flex; gap: 10px; align-items: flex-start; background: var(--red-bg); color: var(--text); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 12px; margin: 0 0 12px; font-size: 12.5px; }
+.banner .m { color: var(--muted); margin-top: 2px; }
+.onboard { max-width: 620px; margin: 0 auto; text-align: left; color: var(--text); }
+.onboard h2 { font-size: 17px; margin: 0 0 10px; }
+.onboard ol { padding-left: 20px; line-height: 1.9; }
+.onboard .m { color: var(--muted); font-size: 12.5px; }
+.sync-grid { grid-template-columns: 90px 1fr; margin-bottom: 6px; }
+.sync-grid input { width: 80px; }
+.scope-note { text-align: center; color: var(--muted); font-size: 11.5px; opacity: .8; margin-top: 14px; line-height: 1.9; }
+.scope-note .clear { font-size: 11.5px; }
+/* Inbox blocks: what needs you first, the rest folded below. */
+.block-h { display: flex; align-items: baseline; gap: 8px; margin: 4px 2px 8px; font-size: 12px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .05em; color: var(--text); }
+.block-h .n { color: var(--muted); font-weight: 500; }
+details.block { margin-top: 18px; }
+details.block > summary { list-style: none; cursor: pointer; color: var(--muted); user-select: none; }
+details.block > summary::-webkit-details-marker { display: none; }
+details.block > summary::before { content: "▸"; transition: transform .15s; display: inline-block; }
+details.block[open] > summary::before { transform: rotate(90deg); }
+.allclear { color: var(--muted); padding: 14px 4px 4px; font-size: 13.5px; }
+
+details.repo { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 10px; overflow: hidden; }
+details.repo > summary { list-style: none; cursor: pointer; padding: 8px 12px; display: flex; align-items: center; gap: 8px;
+  background: var(--panel-2); font-weight: 600; user-select: none; }
+details.repo > summary::-webkit-details-marker { display: none; }
+details.repo > summary::before { content: "▸"; color: var(--muted); transition: transform .15s; }
+details.repo[open] > summary::before { transform: rotate(90deg); }
+summary .org { color: var(--muted); font-weight: 400; }
+summary .cnt { color: var(--muted); font-weight: 400; font-size: 12px; }
+
+.pr { border-top: 1px solid var(--border); }
+.pr:first-of-type { border-top: 0; }
+.line { display: grid; align-items: center; gap: 10px; padding: 7px 12px; cursor: pointer;
+  grid-template-columns: 140px minmax(300px, 4fr) minmax(130px, .7fr) minmax(210px, 1.3fr) 80px 62px 140px; }
+.line:hover { background: var(--panel-2); }
+.cols { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; cursor: default;
+  padding: 0 13px 6px; }
+.cols:hover { background: none; }
+.title { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.title .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.title .num { color: var(--muted); }
+.unread { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: none; }
+.unread.no { background: transparent; }
+
+.act { font-size: 11.5px; font-weight: 600; border-radius: 999px; padding: 2px 8px; white-space: nowrap; justify-self: start; }
+.act.review, .act.changes, .act.ci, .act.conflicts { background: var(--red-bg); color: var(--red); }
+.act.mention, .act.threads { background: var(--orange-bg); color: var(--orange); }
+.act.update { background: var(--yellow-bg); color: var(--yellow); }
+/* How long a review has been waiting for you: amber from 1 day, red from 2. */
+.act .age { font-weight: 500; opacity: .8; }
+.act .age.warn { color: var(--orange); opacity: 1; } .act .age.late { color: var(--red); opacity: 1; font-weight: 700; }
+.flag { font-size: 10.5px; font-weight: 600; border-radius: 4px; padding: 0 5px; flex: none; white-space: nowrap; }
+.flag.conflict { background: var(--red-bg); color: var(--red); }
+.flag.behind { background: var(--yellow-bg); color: var(--yellow); }
+.flag.thr { background: var(--orange-bg); color: var(--orange); }
+.flag.thr.calm { background: var(--gray-bg); color: var(--muted); }
+.size { font-size: 11px; color: var(--muted); flex: none; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.size .add { color: var(--green); } .size .del { color: var(--red); }
+.pr.sel > .line { box-shadow: inset 3px 0 0 var(--accent); background: var(--panel-2); }
+.act.merge { background: var(--green-bg); color: var(--green); }
+.act.reapproval { background: var(--yellow-bg); color: var(--yellow); }
+.act.waiting, .act.fyi { background: var(--gray-bg); color: var(--muted); }
+
+.state { font-size: 11px; border-radius: 999px; padding: 1px 7px; font-weight: 600; flex: none; }
+.state.OPEN { background: var(--green-bg); color: var(--green); }
+.state.DRAFT { background: var(--gray-bg); color: var(--muted); }
+.state.MERGED { background: var(--purple-bg); color: var(--purple); }
+.state.CLOSED { background: var(--red-bg); color: var(--red); }
+
+.who { display: flex; align-items: center; gap: 10px; min-width: 0; color: var(--muted); padding-left: 3px; }
+.who > span:not(.avw) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.av { width: 20px; height: 20px; border-radius: 50%; background: var(--gray-bg); flex: none; object-fit: cover; }
+.avs { display: flex; align-items: center; gap: 3px; flex-wrap: nowrap; overflow: hidden; }
+.rv { position: relative; flex: none; }
+/* Who is who: you (blue ring), your team (green ring), AI (purple ring + "AI" tag), other bots ("BOT" tag). */
+.avw { position: relative; display: inline-flex; flex: none; border-radius: 50%; }
+.avw.me .av { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--accent); }
+.avw.crew .av { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--green); }
+.avw.ai .av { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--purple); }
+.avw.ai::after, .avw.bot::after { position: absolute; top: -5px; right: -7px; font-size: 7.5px; font-weight: 700; line-height: 1.25;
+  border-radius: 4px; padding: 0 2px; letter-spacing: .02em; }
+.avw.ai::after { content: "AI"; background: var(--purple); color: var(--panel); }
+.avw.bot::after { content: "BOT"; background: var(--gray-bg); color: var(--muted); border: 1px solid var(--border); }
+.avs { padding: 5px 4px 3px; gap: 8px !important; }
+.legend { display: inline-flex; gap: 10px; align-items: center; font-size: 11px; color: var(--muted); margin-left: 4px; }
+.legend .sw { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 3px; vertical-align: -1px; }
+.detail .stale-txt { color: var(--yellow); }
+/* Review state + comment badges under each avatar; a faded badge is out of date (older commit / changed code). */
+.rv .badges { position: absolute; right: -6px; bottom: -4px; display: flex; gap: 1px; }
+.rv .badges i { display: inline-flex; background: var(--panel); border-radius: 50%; padding: 1px; }
+.rv .badges .oi { width: 9px; height: 9px; }
+.rv .badges i.faded { opacity: .5; filter: grayscale(1); }
+.detail .faded-txt { opacity: .6; }
+.team { font-size: 10px; padding: 1px 5px; border-radius: 4px; background: var(--gray-bg); color: var(--muted); flex: none; }
+.more { font-size: 11px; color: var(--muted); }
+.mention { font-size: 13px; }
+
+.ci { display: flex; align-items: center; gap: 4px; font-size: 12px; }
+.dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.dot.SUCCESS { background: var(--green); } .dot.FAILURE, .dot.ERROR { background: var(--red); }
+.dot.PENDING, .dot.EXPECTED { background: var(--yellow); } .dot.none { background: var(--gray-bg); }
+.ago { color: var(--muted); font-size: 12px; white-space: nowrap; }
+
+.btns { display: flex; gap: 4px; justify-content: flex-end; position: relative; }
+.btns button { border: 1px solid var(--border); background: var(--panel); border-radius: 6px; padding: 2px 6px; font-size: 13px; }
+.btns button:hover { background: var(--panel-2); }
+/* Row actions only when you point at the row (or select it with the keyboard); the space stays reserved. */
+.pr .btns button { visibility: hidden; }
+.pr:hover .btns button, .pr.sel .btns button, .pr:focus-within .btns button, .pr.menu-on .btns button { visibility: visible; }
+/* Floating (fixed) so the repo card's rounded-corner clipping can't hide it; opens upwards when there's no room below. */
+.menu { position: fixed; background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: 0 6px 20px #0003; padding: 4px; z-index: 10; display: flex; flex-direction: column; min-width: 180px; }
+.menu button { border: 0; text-align: left; padding: 5px 8px; border-radius: 5px; background: none; }
+.menu button:hover { background: var(--panel-2); }
+.menu .sep { border-top: 1px solid var(--border); margin: 4px 0; }
+.menu .custom { display: flex; gap: 4px; align-items: center; padding: 0 0 2px; }
+.menu .custom button { background: var(--accent); color: #fff; padding: 4px 8px; }
+.menu input { margin: 4px; font: inherit; background: var(--panel-2); color: var(--text); border: 1px solid var(--border); border-radius: 5px; padding: 3px; }
+
+.detail { padding: 4px 12px 12px 162px; display: flex; flex-wrap: wrap; gap: 14px 28px;
+  color: var(--text); font-size: 12.5px; }
+.detail h4 { margin: 6px 0 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.detail ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.detail li { display: flex; gap: 10px; align-items: center; }
+.detail li:has(.ex, div > .m) { align-items: flex-start; }
+.detail .m { color: var(--muted); }
+.detail li.check > span { width: 18px; flex: none; text-align: center; }
+.detail .ex { color: var(--muted); font-style: italic; }
+.markinfo { color: var(--muted); font-size: 12px; }
+.detail > div { flex: 1 1 260px; min-width: 0; }
+.detail .why, .detail .notified { flex-basis: 100%; }
+.detail .notified { color: var(--muted); font-size: 11.5px; }
+.detail .people { flex: 3 1 560px; }
+.detail .people li > span:nth-child(2) { width: 170px; flex: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.theme-pick { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12.5px; }
+.team-list { display: flex; flex-direction: column; gap: 2px; font-size: 12.5px; }
+.team-list label { display: flex; gap: 6px; align-items: center; }
+.team-list .n { color: var(--muted); font-size: 11px; margin-left: auto; }
+details.adv > summary { cursor: pointer; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; font-weight: 700; }
+
+@media (max-width: 1000px) {
+  .row1 { grid-template-columns: 1fr; }
+  .row1 .hr { justify-content: flex-start; }
+}
+@media (max-width: 1100px) {
+  .line { grid-template-columns: 140px minmax(180px, 1fr) 180px 80px 62px 140px; }
+  .line .c-author { display: none; }
+  .detail { padding-left: 12px; }
+}
+@media (max-width: 720px) {
+  .line { grid-template-columns: 1fr auto; }
+  .line > *:not(.title):not(.btns) { display: none; }
+  .cols { display: none; }
+  input[type=search] { width: 140px; }
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="row1">
+    <div class="hl"><div class="brand"><img src="/static/icon.svg" alt="">PR Inbox</div><div class="tabs" id="tabs"></div></div>
+    <input type="search" id="q" placeholder="Search by title, repo, author or number…">
+    <div class="hr">
+    <button class="conn" id="sync" title="GitHub connection status (click to sync)"></button>
+    <button class="iconbtn" id="bell" title="Desktop notifications"></button>
+    <button class="iconbtn" id="open-settings" title="Settings: notifications, appearance, accounts"></button>
+    </div>
+  </div>
+  <div class="filters" id="filters"></div>
+</header>
+<main id="main"></main>
+<div id="ddpanel"></div>
+<div class="toast" id="toast"></div>
+<div id="snoozemenu" class="menu hidden" role="menu"></div>
+<div id="backdrop" class="hidden"></div>
+<aside id="settings" class="hidden" aria-label="Settings">
+  <div class="drawer-head"><b>Settings</b><button class="btn" data-close-settings>Close</button></div>
+  <div id="settings-body"></div>
+</aside>
+
+<script>
+// Octicons 19.15 (MIT, © GitHub Inc., https://primer.style/octicons), 16px paths.
+const ICONS = {
+  "eye": "<path d=\"M8 2c1.981 0 3.671.992 4.933 2.078 1.27 1.091 2.187 2.345 2.637 3.023a1.62 1.62 0 0 1 0 1.798c-.45.678-1.367 1.932-2.637 3.023C11.67 13.008 9.981 14 8 14c-1.981 0-3.671-.992-4.933-2.078C1.797 10.83.88 9.576.43 8.898a1.62 1.62 0 0 1 0-1.798c.45-.677 1.367-1.931 2.637-3.022C4.33 2.992 6.019 2 8 2ZM1.679 7.932a.12.12 0 0 0 0 .136c.411.622 1.241 1.75 2.366 2.717C5.176 11.758 6.527 12.5 8 12.5c1.473 0 2.825-.742 3.955-1.715 1.124-.967 1.954-2.096 2.366-2.717a.12.12 0 0 0 0-.136c-.412-.621-1.242-1.75-2.366-2.717C10.824 4.242 9.473 3.5 8 3.5c-1.473 0-2.825.742-3.955 1.715-1.124.967-1.954 2.096-2.366 2.717ZM8 10a2 2 0 1 1-.001-3.999A2 2 0 0 1 8 10Z\"/>",
+  "pencil": "<path d=\"M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 0 1-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61Zm.176 4.823L9.75 4.81l-6.286 6.287a.253.253 0 0 0-.064.108l-.558 1.953 1.953-.558a.253.253 0 0 0 .108-.064Zm1.238-3.763a.25.25 0 0 0-.354 0L10.811 3.75l1.439 1.44 1.263-1.263a.25.25 0 0 0 0-.354Z\"/>",
+  "alert": "<path d=\"M6.457 1.047c.659-1.234 2.427-1.234 3.086 0l6.082 11.378A1.75 1.75 0 0 1 14.082 15H1.918a1.75 1.75 0 0 1-1.543-2.575Zm1.763.707a.25.25 0 0 0-.44 0L1.698 13.132a.25.25 0 0 0 .22.368h12.164a.25.25 0 0 0 .22-.368Zm.53 3.996v2.5a.75.75 0 0 1-1.5 0v-2.5a.75.75 0 0 1 1.5 0ZM9 11a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z\"/>",
+  "x-circle": "<path d=\"M2.344 2.343h-.001a8 8 0 0 1 11.314 11.314A8.002 8.002 0 0 1 .234 10.089a8 8 0 0 1 2.11-7.746Zm1.06 10.253a6.5 6.5 0 1 0 9.108-9.275 6.5 6.5 0 0 0-9.108 9.275ZM6.03 4.97 8 6.94l1.97-1.97a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l1.97 1.97a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-1.97 1.97a.749.749 0 0 1-1.275-.326.749.749 0 0 1 .215-.734L6.94 8 4.97 6.03a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018Z\"/>",
+  "x-circle-fill": "<path d=\"M2.343 13.657A8 8 0 1 1 13.658 2.343 8 8 0 0 1 2.343 13.657ZM6.03 4.97a.751.751 0 0 0-1.042.018.751.751 0 0 0-.018 1.042L6.94 8 4.97 9.97a.749.749 0 0 0 .326 1.275.749.749 0 0 0 .734-.215L8 9.06l1.97 1.97a.749.749 0 0 0 1.275-.326.749.749 0 0 0-.215-.734L9.06 8l1.97-1.97a.749.749 0 0 0-.326-1.275.749.749 0 0 0-.734.215L8 6.94Z\"/>",
+  "mention": "<path d=\"M4.75 2.37a6.501 6.501 0 0 0 6.5 11.26.75.75 0 0 1 .75 1.298A7.999 7.999 0 0 1 .989 4.148 8 8 0 0 1 16 7.75v1.5a2.75 2.75 0 0 1-5.072 1.475 3.999 3.999 0 0 1-6.65-4.19A4 4 0 0 1 12 8v1.25a1.25 1.25 0 0 0 2.5 0V7.867a6.5 6.5 0 0 0-9.75-5.496ZM10.5 8a2.5 2.5 0 1 0-5 0 2.5 2.5 0 0 0 5 0Z\"/>",
+  "comment-discussion": "<path d=\"M1.75 1h8.5c.966 0 1.75.784 1.75 1.75v5.5A1.75 1.75 0 0 1 10.25 10H7.061l-2.574 2.573A1.458 1.458 0 0 1 2 11.543V10h-.25A1.75 1.75 0 0 1 0 8.25v-5.5C0 1.784.784 1 1.75 1ZM1.5 2.75v5.5c0 .138.112.25.25.25h1a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h3.5a.25.25 0 0 0 .25-.25v-5.5a.25.25 0 0 0-.25-.25h-8.5a.25.25 0 0 0-.25.25Zm13 2a.25.25 0 0 0-.25-.25h-.5a.75.75 0 0 1 0-1.5h.5c.966 0 1.75.784 1.75 1.75v5.5A1.75 1.75 0 0 1 14.25 12H14v1.543a1.458 1.458 0 0 1-2.487 1.03L9.22 12.28a.749.749 0 0 1 .326-1.275.749.749 0 0 1 .734.215l2.22 2.22v-2.19a.75.75 0 0 1 .75-.75h1a.25.25 0 0 0 .25-.25Z\"/>",
+  "comment": "<path d=\"M1 2.75C1 1.784 1.784 1 2.75 1h10.5c.966 0 1.75.784 1.75 1.75v7.5A1.75 1.75 0 0 1 13.25 12H9.06l-2.573 2.573A1.458 1.458 0 0 1 4 13.543V12H2.75A1.75 1.75 0 0 1 1 10.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h2a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h4.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z\"/>",
+  "sync": "<path d=\"M1.705 8.005a.75.75 0 0 1 .834.656 5.5 5.5 0 0 0 9.592 2.97l-1.204-1.204a.25.25 0 0 1 .177-.427h3.646a.25.25 0 0 1 .25.25v3.646a.25.25 0 0 1-.427.177l-1.38-1.38A7.002 7.002 0 0 1 1.05 8.84a.75.75 0 0 1 .656-.834ZM8 2.5a5.487 5.487 0 0 0-4.131 1.869l1.204 1.204A.25.25 0 0 1 4.896 6H1.25A.25.25 0 0 1 1 5.75V2.104a.25.25 0 0 1 .427-.177l1.38 1.38A7.002 7.002 0 0 1 14.95 7.16a.75.75 0 0 1-1.49.178A5.5 5.5 0 0 0 8 2.5Z\"/>",
+  "git-branch": "<path d=\"M9.5 3.25a2.25 2.25 0 1 1 3 2.122V6A2.5 2.5 0 0 1 10 8.5H6a1 1 0 0 0-1 1v1.128a2.251 2.251 0 1 1-1.5 0V5.372a2.25 2.25 0 1 1 1.5 0v1.836A2.493 2.493 0 0 1 6 7h4a1 1 0 0 0 1-1v-.628A2.25 2.25 0 0 1 9.5 3.25Zm-6 0a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0Zm8.25-.75a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5ZM4.25 12a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Z\"/>",
+  "git-merge": "<path d=\"M5.45 5.154A4.25 4.25 0 0 0 9.25 7.5h1.378a2.251 2.251 0 1 1 0 1.5H9.25A5.734 5.734 0 0 1 5 7.123v3.505a2.25 2.25 0 1 1-1.5 0V5.372a2.25 2.25 0 1 1 1.95-.218ZM4.25 13.5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm8.5-4.5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5ZM5 3.25a.75.75 0 1 0 0 .005V3.25Z\"/>",
+  "hourglass": "<path d=\"M2.75 1h10.5a.75.75 0 0 1 0 1.5h-.75v1.25a4.75 4.75 0 0 1-1.9 3.8l-.333.25a.25.25 0 0 0 0 .4l.333.25a4.75 4.75 0 0 1 1.9 3.8v1.25h.75a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5h.75v-1.25a4.75 4.75 0 0 1 1.9-3.8l.333-.25a.25.25 0 0 0 0-.4L5.4 7.55a4.75 4.75 0 0 1-1.9-3.8V2.5h-.75a.75.75 0 0 1 0-1.5ZM11 2.5H5v1.25c0 1.023.482 1.986 1.3 2.6l.333.25c.934.7.934 2.1 0 2.8l-.333.25a3.251 3.251 0 0 0-1.3 2.6v1.25h6v-1.25a3.251 3.251 0 0 0-1.3-2.6l-.333-.25a1.748 1.748 0 0 1 0-2.8l.333-.25a3.251 3.251 0 0 0 1.3-2.6Z\"/>",
+  "info": "<path d=\"M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm8-6.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM6.5 7.75A.75.75 0 0 1 7.25 7h1a.75.75 0 0 1 .75.75v2.75h.25a.75.75 0 0 1 0 1.5h-2a.75.75 0 0 1 0-1.5h.25v-2h-.25a.75.75 0 0 1-.75-.75ZM8 6a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z\"/>",
+  "check-circle-fill": "<path d=\"M8 16A8 8 0 1 1 8 0a8 8 0 0 1 0 16Zm3.78-9.72a.751.751 0 0 0-.018-1.042.751.751 0 0 0-1.042-.018L6.75 9.19 5.28 7.72a.751.751 0 0 0-1.042.018.751.751 0 0 0-.018 1.042l2 2a.75.75 0 0 0 1.06 0Z\"/>",
+  "check-circle": "<path d=\"M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm1.5 0a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Zm10.28-1.72-4.5 4.5a.75.75 0 0 1-1.06 0l-2-2a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018l1.47 1.47 3.97-3.97a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042Z\"/>",
+  "file-diff": "<path d=\"M1 1.75C1 .784 1.784 0 2.75 0h7.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16H2.75A1.75 1.75 0 0 1 1 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h10.5a.25.25 0 0 0 .25-.25V4.664a.25.25 0 0 0-.073-.177l-2.914-2.914a.25.25 0 0 0-.177-.073ZM8 3.25a.75.75 0 0 1 .75.75v1.5h1.5a.75.75 0 0 1 0 1.5h-1.5v1.5a.75.75 0 0 1-1.5 0V7h-1.5a.75.75 0 0 1 0-1.5h1.5V4A.75.75 0 0 1 8 3.25Zm-3 8a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1-.75-.75Z\"/>",
+  "dot-fill": "<path d=\"M8 4a4 4 0 1 1 0 8 4 4 0 0 1 0-8Z\"/>",
+  "circle-slash": "<path d=\"M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM3.965 13.096a6.5 6.5 0 0 0 9.131-9.131ZM1.5 8a6.474 6.474 0 0 0 1.404 4.035l9.131-9.131A6.499 6.499 0 0 0 1.5 8Z\"/>",
+  "link": "<path d=\"m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z\"/>",
+  "link-external": "<path d=\"M3.75 2h3.5a.75.75 0 0 1 0 1.5h-3.5a.25.25 0 0 0-.25.25v8.5c0 .138.112.25.25.25h8.5a.25.25 0 0 0 .25-.25v-3.5a.75.75 0 0 1 1.5 0v3.5A1.75 1.75 0 0 1 12.25 14h-8.5A1.75 1.75 0 0 1 2 12.25v-8.5C2 2.784 2.784 2 3.75 2Zm6.854-1h4.146a.25.25 0 0 1 .25.25v4.146a.25.25 0 0 1-.427.177L13.03 4.03 9.28 7.78a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042l3.75-3.75-1.543-1.543A.25.25 0 0 1 10.604 1Z\"/>",
+  "check": "<path d=\"M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z\"/>",
+  "clock": "<path d=\"M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Zm7-3.25v2.992l2.028.812a.75.75 0 0 1-.557 1.392l-2.5-1A.751.751 0 0 1 7 8.25v-3.5a.75.75 0 0 1 1.5 0Z\"/>",
+  "bell": "<path d=\"M8 16a2 2 0 0 0 1.985-1.75c.017-.137-.097-.25-.235-.25h-3.5c-.138 0-.252.113-.235.25A2 2 0 0 0 8 16ZM3 5a5 5 0 0 1 10 0v2.947c0 .05.015.098.042.139l1.703 2.555A1.519 1.519 0 0 1 13.482 13H2.518a1.516 1.516 0 0 1-1.263-2.36l1.703-2.554A.255.255 0 0 0 3 7.947Zm5-3.5A3.5 3.5 0 0 0 4.5 5v2.947c0 .346-.102.683-.294.97l-1.703 2.556a.017.017 0 0 0-.003.01l.001.006c0 .002.002.004.004.006l.006.004.007.001h10.964l.007-.001.006-.004.004-.006.001-.007a.017.017 0 0 0-.003-.01l-1.703-2.554a1.745 1.745 0 0 1-.294-.97V5A3.5 3.5 0 0 0 8 1.5Z\"/>",
+  "bell-slash": "<path d=\"m4.182 4.31.016.011 10.104 7.316.013.01 1.375.996a.75.75 0 1 1-.88 1.214L13.626 13H2.518a1.516 1.516 0 0 1-1.263-2.36l1.703-2.554A.255.255 0 0 0 3 7.947V5.305L.31 3.357a.75.75 0 1 1 .88-1.214Zm7.373 7.19L4.5 6.391v1.556c0 .346-.102.683-.294.97l-1.703 2.556a.017.017 0 0 0-.003.01c0 .005.002.009.005.012l.006.004.007.001ZM8 1.5c-.997 0-1.895.416-2.534 1.086A.75.75 0 1 1 4.38 1.55 5 5 0 0 1 13 5v2.373a.75.75 0 0 1-1.5 0V5A3.5 3.5 0 0 0 8 1.5ZM8 16a2 2 0 0 1-1.985-1.75c-.017-.137.097-.25.235-.25h3.5c.138 0 .252.113.235.25A2 2 0 0 1 8 16Z\"/>",
+  "gear": "<path d=\"M8 0a8.2 8.2 0 0 1 .701.031C9.444.095 9.99.645 10.16 1.29l.288 1.107c.018.066.079.158.212.224.231.114.454.243.668.386.123.082.233.09.299.071l1.103-.303c.644-.176 1.392.021 1.82.63.27.385.506.792.704 1.218.315.675.111 1.422-.364 1.891l-.814.806c-.049.048-.098.147-.088.294.016.257.016.515 0 .772-.01.147.038.246.088.294l.814.806c.475.469.679 1.216.364 1.891a7.977 7.977 0 0 1-.704 1.217c-.428.61-1.176.807-1.82.63l-1.102-.302c-.067-.019-.177-.011-.3.071a5.909 5.909 0 0 1-.668.386c-.133.066-.194.158-.211.224l-.29 1.106c-.168.646-.715 1.196-1.458 1.26a8.006 8.006 0 0 1-1.402 0c-.743-.064-1.289-.614-1.458-1.26l-.289-1.106c-.018-.066-.079-.158-.212-.224a5.738 5.738 0 0 1-.668-.386c-.123-.082-.233-.09-.299-.071l-1.103.303c-.644.176-1.392-.021-1.82-.63a8.12 8.12 0 0 1-.704-1.218c-.315-.675-.111-1.422.363-1.891l.815-.806c.05-.048.098-.147.088-.294a6.214 6.214 0 0 1 0-.772c.01-.147-.038-.246-.088-.294l-.815-.806C.635 6.045.431 5.298.746 4.623a7.92 7.92 0 0 1 .704-1.217c.428-.61 1.176-.807 1.82-.63l1.102.302c.067.019.177.011.3-.071.214-.143.437-.272.668-.386.133-.066.194-.158.211-.224l.29-1.106C6.009.645 6.556.095 7.299.03 7.53.01 7.764 0 8 0Zm-.571 1.525c-.036.003-.108.036-.137.146l-.289 1.105c-.147.561-.549.967-.998 1.189-.173.086-.34.183-.5.29-.417.278-.97.423-1.529.27l-1.103-.303c-.109-.03-.175.016-.195.045-.22.312-.412.644-.573.99-.014.031-.021.11.059.19l.815.806c.411.406.562.957.53 1.456a4.709 4.709 0 0 0 0 .582c.032.499-.119 1.05-.53 1.456l-.815.806c-.081.08-.073.159-.059.19.162.346.353.677.573.989.02.03.085.076.195.046l1.102-.303c.56-.153 1.113-.008 1.53.27.161.107.328.204.501.29.447.222.85.629.997 1.189l.289 1.105c.029.109.101.143.137.146a6.6 6.6 0 0 0 1.142 0c.036-.003.108-.036.137-.146l.289-1.105c.147-.561.549-.967.998-1.189.173-.086.34-.183.5-.29.417-.278.97-.423 1.529-.27l1.103.303c.109.029.175-.016.195-.045.22-.313.411-.644.573-.99.014-.031.021-.11-.059-.19l-.815-.806c-.411-.406-.562-.957-.53-1.456a4.709 4.709 0 0 0 0-.582c-.032-.499.119-1.05.53-1.456l.815-.806c.081-.08.073-.159.059-.19a6.464 6.464 0 0 0-.573-.989c-.02-.03-.085-.076-.195-.046l-1.102.303c-.56.153-1.113.008-1.53-.27a4.44 4.44 0 0 0-.501-.29c-.447-.222-.85-.629-.997-1.189l-.289-1.105c-.029-.11-.101-.143-.137-.146a6.6 6.6 0 0 0-1.142 0ZM11 8a3 3 0 1 1-6 0 3 3 0 0 1 6 0ZM9.5 8a1.5 1.5 0 1 0-3.001.001A1.5 1.5 0 0 0 9.5 8Z\"/>",
+  "sun": "<path d=\"M8 12a4 4 0 1 1 0-8 4 4 0 0 1 0 8Zm0-1.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Zm5.657-8.157a.75.75 0 0 1 0 1.061l-1.061 1.06a.749.749 0 0 1-1.275-.326.749.749 0 0 1 .215-.734l1.06-1.06a.75.75 0 0 1 1.06 0Zm-9.193 9.193a.75.75 0 0 1 0 1.06l-1.06 1.061a.75.75 0 1 1-1.061-1.06l1.06-1.061a.75.75 0 0 1 1.061 0ZM8 0a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0V.75A.75.75 0 0 1 8 0ZM3 8a.75.75 0 0 1-.75.75H.75a.75.75 0 0 1 0-1.5h1.5A.75.75 0 0 1 3 8Zm13 0a.75.75 0 0 1-.75.75h-1.5a.75.75 0 0 1 0-1.5h1.5A.75.75 0 0 1 16 8Zm-8 5a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5A.75.75 0 0 1 8 13Zm3.536-1.464a.75.75 0 0 1 1.06 0l1.061 1.06a.75.75 0 0 1-1.06 1.061l-1.061-1.06a.75.75 0 0 1 0-1.061ZM2.343 2.343a.75.75 0 0 1 1.061 0l1.06 1.061a.751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018l-1.06-1.06a.75.75 0 0 1 0-1.06Z\"/>",
+  "moon": "<path d=\"M9.598 1.591a.749.749 0 0 1 .785-.175 7.001 7.001 0 1 1-8.967 8.967.75.75 0 0 1 .961-.96 5.5 5.5 0 0 0 7.046-7.046.75.75 0 0 1 .175-.786Zm1.616 1.945a7 7 0 0 1-7.678 7.678 5.499 5.499 0 1 0 7.678-7.678Z\"/>",
+  "device-desktop": "<path d=\"M14.25 1c.966 0 1.75.784 1.75 1.75v7.5A1.75 1.75 0 0 1 14.25 12h-3.727c.099 1.041.52 1.872 1.292 2.757A.752.752 0 0 1 11.25 16h-6.5a.75.75 0 0 1-.565-1.243c.772-.885 1.192-1.716 1.292-2.757H1.75A1.75 1.75 0 0 1 0 10.25v-7.5C0 1.784.784 1 1.75 1ZM1.75 2.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h12.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25ZM9.018 12H6.982a5.72 5.72 0 0 1-.765 2.5h3.566a5.72 5.72 0 0 1-.765-2.5Z\"/>",
+  "checklist": "<path d=\"M2.5 1.75v11.5c0 .138.112.25.25.25h3.17a.75.75 0 0 1 0 1.5H2.75A1.75 1.75 0 0 1 1 13.25V1.75C1 .784 1.784 0 2.75 0h8.5C12.216 0 13 .784 13 1.75v7.736a.75.75 0 0 1-1.5 0V1.75a.25.25 0 0 0-.25-.25h-8.5a.25.25 0 0 0-.25.25Zm13.274 9.537v-.001l-4.557 4.45a.75.75 0 0 1-1.055-.008l-1.943-1.95a.75.75 0 0 1 1.062-1.058l1.419 1.425 4.026-3.932a.75.75 0 1 1 1.048 1.074ZM4.75 4h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM4 7.75A.75.75 0 0 1 4.75 7h2a.75.75 0 0 1 0 1.5h-2A.75.75 0 0 1 4 7.75Z\"/>",
+  "git-pull-request": "<path d=\"M1.5 3.25a2.25 2.25 0 1 1 3 2.122v5.256a2.251 2.251 0 1 1-1.5 0V5.372A2.25 2.25 0 0 1 1.5 3.25Zm5.677-.177L9.573.677A.25.25 0 0 1 10 .854V2.5h1A2.5 2.5 0 0 1 13.5 5v5.628a2.251 2.251 0 1 1-1.5 0V5a1 1 0 0 0-1-1h-1v1.646a.25.25 0 0 1-.427.177L7.177 3.427a.25.25 0 0 1 0-.354ZM3.75 2.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm0 9.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm8.25.75a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0Z\"/>",
+  "repo": "<path d=\"M2 2.5A2.5 2.5 0 0 1 4.5 0h8.75a.75.75 0 0 1 .75.75v12.5a.75.75 0 0 1-.75.75h-2.5a.75.75 0 0 1 0-1.5h1.75v-2h-8a1 1 0 0 0-.714 1.7.75.75 0 1 1-1.072 1.05A2.495 2.495 0 0 1 2 11.5Zm10.5-1h-8a1 1 0 0 0-1 1v6.708A2.486 2.486 0 0 1 4.5 9h8ZM5 12.25a.25.25 0 0 1 .25-.25h3.5a.25.25 0 0 1 .25.25v3.25a.25.25 0 0 1-.4.2l-1.45-1.087a.249.249 0 0 0-.3 0L5.4 15.7a.25.25 0 0 1-.4-.2Z\"/>",
+  "person": "<path d=\"M10.561 8.073a6.005 6.005 0 0 1 3.432 5.142.75.75 0 1 1-1.498.07 4.5 4.5 0 0 0-8.99 0 .75.75 0 0 1-1.498-.07 6.004 6.004 0 0 1 3.431-5.142 3.999 3.999 0 1 1 5.123 0ZM10.5 5a2.5 2.5 0 1 0-5 0 2.5 2.5 0 0 0 5 0Z\"/>",
+  "id-badge": "<path d=\"M3 7.5a.5.5 0 0 1 .5-.5h2a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1-.5-.5v-3Zm10 .25a.75.75 0 0 1-.75.75h-4.5a.75.75 0 0 1 0-1.5h4.5a.75.75 0 0 1 .75.75ZM10.25 11a.75.75 0 0 0 0-1.5h-2.5a.75.75 0 0 0 0 1.5h2.5Z\"/><path d=\"M7.25 0h1.5c.966 0 1.75.784 1.75 1.75V3h3.75c.966 0 1.75.784 1.75 1.75v8.5A1.75 1.75 0 0 1 14.25 15H1.75A1.75 1.75 0 0 1 0 13.25v-8.5C0 3.784.784 3 1.75 3H5.5V1.75C5.5.784 6.284 0 7.25 0Zm3.232 4.5A1.75 1.75 0 0 1 8.75 6h-1.5a1.75 1.75 0 0 1-1.732-1.5H1.75a.25.25 0 0 0-.25.25v8.5c0 .138.112.25.25.25h12.5a.25.25 0 0 0 .25-.25v-8.5a.25.25 0 0 0-.25-.25ZM7 1.75v2.5c0 .138.112.25.25.25h1.5A.25.25 0 0 0 9 4.25v-2.5a.25.25 0 0 0-.25-.25h-1.5a.25.25 0 0 0-.25.25Z\"/>",
+  "key": "<path d=\"M10.5 0a5.499 5.499 0 1 1-1.288 10.848l-.932.932a.749.749 0 0 1-.53.22H7v.75a.749.749 0 0 1-.22.53l-.5.5a.749.749 0 0 1-.53.22H5v.75a.749.749 0 0 1-.22.53l-.5.5a.749.749 0 0 1-.53.22h-2A1.75 1.75 0 0 1 0 14.25v-2c0-.199.079-.389.22-.53l4.932-4.932A5.5 5.5 0 0 1 10.5 0Zm-4 5.5c-.001.431.069.86.205 1.269a.75.75 0 0 1-.181.768L1.5 12.56v1.69c0 .138.112.25.25.25h1.69l.06-.06v-1.19a.75.75 0 0 1 .75-.75h1.19l.06-.06v-1.19a.75.75 0 0 1 .75-.75h1.19l1.023-1.025a.75.75 0 0 1 .768-.18A4 4 0 1 0 6.5 5.5ZM11 6a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z\"/>",
+  "undo": "<path d=\"M1.22 6.28a.749.749 0 0 1 0-1.06l3.5-3.5a.749.749 0 1 1 1.06 1.06L3.561 5h7.188l.001.007L10.749 5c.058 0 .116.007.171.019A4.501 4.501 0 0 1 10.5 14H8.796a.75.75 0 0 1 0-1.5H10.5a3 3 0 1 0 0-6H3.561L5.78 8.72a.749.749 0 1 1-1.06 1.06l-3.5-3.5Z\"/>",
+  "x": "<path d=\"M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z\"/>",
+  "skip": "<path d=\"M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Zm9.78-2.22-5.5 5.5a.749.749 0 0 1-1.275-.326.749.749 0 0 1 .215-.734l5.5-5.5a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042Z\"/>"
+};
+const ic = (name, cls = "") => `<svg class="oi ${cls}" viewBox="0 0 16 16" aria-hidden="true">${ICONS[name]}</svg>`;
+const ACTIONS = {
+  review:  { label: "Review",           icon: ic("eye") },
+  changes: { label: "Address changes",  icon: ic("pencil") },
+  conflicts: { label: "Fix conflicts",    icon: ic("alert") },
+  ci:      { label: "Fix CI",           icon: ic("x-circle") },
+  mention: { label: "Reply to mention", icon: ic("mention") },
+  threads: { label: "Reply to review",  icon: ic("comment-discussion") },
+  reapproval: { label: "Ask re-approval",  icon: ic("sync") },
+  update:  { label: "Update branch",    icon: ic("git-branch") },
+  merge:   { label: "Merge",            icon: ic("git-merge") },
+  waiting: { label: "Waiting",          icon: ic("hourglass") },
+  fyi:     { label: "FYI",              icon: ic("info") },
+};
+const STATES = { OPEN: "Open", DRAFT: "Draft", MERGED: "Merged", CLOSED: "Closed" };
+const TABS = { inbox: "Inbox", snoozed: "Snoozed", done: "Done", muted: "Muted" };
+const REVIEW_ICON = { APPROVED: ic("check-circle-fill", "ok"), CHANGES_REQUESTED: ic("file-diff", "bad"), COMMENTED: ic("comment", "mut"),
+  PENDING: ic("dot-fill", "wait"), DISMISSED: ic("circle-slash", "mut") };
+const REVIEW_TEXT = { APPROVED: "approved", CHANGES_REQUESTED: "changes requested", COMMENTED: "commented", PENDING: "pending", DISMISSED: "dismissed" };
+const REASONS = { review_requested: "review requested", mention: "mention", team_mention: "team mention", author: "author",
+  comment: "comment", state_change: "state change", ci_activity: "CI", assign: "assigned", subscribed: "subscribed",
+  manual: "manual", security_alert: "security alert", approval_requested: "approval requested" };
+const FACETS = ["accounts", "repos", "authors", "actions", "states"];
+const acctOf = id => S.accounts.find(a => a.id === id) || { id, label: id, color: "#888" };
+const activeAccounts = () => S.accounts.filter(a => a.enabled);
+const multi = () => activeAccounts().length > 1;
+const acctBadge = id => { const a = acctOf(id); return `<span class="acct-badge" style="--acc:${esc(a.color)}" title="Account ${esc(a.login)} (${esc(a.host)})">${esc(a.label)}</span>`; };
+
+const ls = { get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } },
+             set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
+const ui = { maxR: 5,
+  tab: "inbox", q: "", f: Object.fromEntries(FACETS.map(k => [k, []])), teams: null, theme: "auto",
+  expanded: new Set(), collapsed: new Set(), menu: null, dd: null, ddq: "", laterOpen: false, advOpen: false,
+};
+let S = null;
+
+// UI preferences live in the backend's SQLite (not browser storage), so they survive closing the app and rebooting.
+function applyPrefs(p) {
+  if (!p || typeof p !== "object") return;
+  if (TABS[p.tab]) ui.tab = p.tab;
+  FACETS.forEach(k => { if (Array.isArray(p.f?.[k])) ui.f[k] = p.f[k]; });
+  if (Array.isArray(p.collapsed)) ui.collapsed = new Set(p.collapsed);
+  if (Array.isArray(p.teams)) ui.teams = p.teams;
+  if (THEMES[p.theme]) ui.theme = p.theme;
+  if (typeof p.laterOpen === "boolean") ui.laterOpen = p.laterOpen;
+  applyTheme();
+}
+const THEMES = { auto: { icon: "device-desktop", label: "Automatic (follows Ubuntu)" }, light: { icon: "sun", label: "Light" }, dark: { icon: "moon", label: "Dark" } };
+function applyTheme() {
+  const root = document.documentElement;
+  ui.theme === "auto" ? delete root.dataset.theme : root.dataset.theme = ui.theme;
+}
+let prefsTimer;
+function savePrefs() {
+  const prefs = { tab: ui.tab, f: ui.f, collapsed: [...ui.collapsed], teams: ui.teams, theme: ui.theme, laterOpen: ui.laterOpen };
+  ls.set("prefs", prefs);
+  clearTimeout(prefsTimer);
+  prefsTimer = setTimeout(() => api("/api/prefs", prefs).catch(() => {}), 300);
+}
+
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+// AI accounts: bots (per GitHub) or well-known AI reviewer logins.
+const AI_RE = /claude|copilot|coderabbit|depthfirst|sourcery|codex|gemini|cursor|devin|qodo|codium|ellipsis|greptile|sweep|openai|chatgpt|korbit|bito|graphite|amazon-q|q-developer|codeant|mergify-ai|what-the-diff/i;
+let BOTS = new Set(), TEAM = new Map();  // TEAM: login -> team names, from the teams picked in Settings
+function personKind(login) {
+  if (!login) return "";
+  if (S && S.mes.includes(login)) return "me";
+  const isBot = BOTS.has(login) || /\[bot\]$/.test(login);
+  if (AI_RE.test(login) && (isBot || /^(claude|copilot|coderabbitai|depthfirst-app)$/i.test(login))) return "ai";
+  if (isBot) return "bot";
+  if (TEAM.has(login)) return "crew";
+  return "";
+}
+function personTitle(login) {
+  const k = personKind(login);
+  return k === "me" ? `${login} (you)` : k === "crew" ? `${login} · team ${TEAM.get(login).join(", ")}`
+    : k === "ai" ? `${login} · AI` : k === "bot" ? `${login} · bot` : login;
+}
+function av(url, login, title) {
+  const img = url ? `<img class="av" src="${esc(url)}${url.includes("?") ? "&" : "?"}s=40" alt="">` : `<span class="av"></span>`;
+  return `<span class="avw ${personKind(login)}" title="${esc(title || personTitle(login))}">${img}</span>`;
+}
+// Teams to highlight: your choice, or by default the small ones (org-wide teams would light up everybody).
+const pickedTeams = () => ui.teams ?? (S.teams || []).filter(t => t.size <= 30).map(t => `${t.org}/${t.slug}`);
+function computePeople() {
+  BOTS = new Set(S.items.flatMap(i => i.bots || []));
+  TEAM = new Map();
+  const picked = pickedTeams();
+  (S.teams || []).filter(t => picked.includes(`${t.org}/${t.slug}`)).forEach(t =>
+    t.members.forEach(m => !S.mes.includes(m) && !(TEAM.get(m) || []).includes(t.slug) && TEAM.set(m, [...(TEAM.get(m) || []), t.slug])));
+}
+function ago(ts) {
+  if (!ts) return "";
+  const s = (Date.now() - new Date(ts)) / 1000;
+  if (s < 60) return "now";
+  if (s < 3600) return `${Math.floor(s / 60)} min`;
+  if (s < 86400) return `${Math.floor(s / 3600)} h`;
+  return `${Math.floor(s / 86400)} d`;
+}
+const fmt = ts => ts ? new Date(ts).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
+const authorLabel = login => S.mes.includes(login) ? "you" : login;
+
+// Only touch the DOM when the markup actually changed: avoids flicker and avatar reloads on every poll.
+function setHTML(el, html) { if (el._html !== html) { el.innerHTML = html; el._html = html; } }
+// Relative times are filled in place, outside the compared markup, so the clock ticking doesn't re-render rows.
+function tickAgo() { document.querySelectorAll("[data-ago]").forEach(el => { const t = ago(el.dataset.ago); if (el.textContent !== t) el.textContent = t; }); }
+
+async function api(path, body) {
+  const r = await fetch(path, body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {});
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || r.status);
+  return data;
+}
+let lastPayload = "";
+async function load() {
+  try {
+    const text = await (await fetch("/api/state")).text();
+    backendDown = false;
+    if (text === lastPayload) return renderHeader();
+    lastPayload = text;
+    S = JSON.parse(text);
+    render();
+  } catch (e) {
+    backendDown = true;
+    if (S) renderHeader(); else renderConn();
+  }
+}
+let backendDown = false;
+async function post(path, body) {
+  try { S = await api(path, body); lastPayload = ""; render(); return true; }
+  catch (e) { toast(e.message, 5000, null, "alert"); return false; }
+}
+// Done / snooze / mute, with a few seconds to take it back.
+async function markPR(key, kind, until) {
+  if (!await post("/api/mark", { key, kind, until })) return;
+  const msg = kind === "snooze" ? `Snoozed until ${fmt(until)}` : kind === "done" ? "Marked done" : "Muted (unsubscribed on GitHub)";
+  toast(msg, 6000, { label: "Undo", run: () => post("/api/unmark", { key }) }, { snooze: "clock", done: "check", mute: "bell-slash" }[kind]);
+}
+
+// --- filtering ---------------------------------------------------------
+
+function match(i, skip) {
+  const f = ui.f, q = ui.q.toLowerCase();
+  return (skip === "accounts" || !f.accounts.length || f.accounts.includes(i.account))
+    && (skip === "repos" || !f.repos.length || f.repos.includes(i.repo))
+    && (skip === "authors" || !f.authors.length || f.authors.includes(i.author.login))
+    && (skip === "actions" || !f.actions.length || f.actions.includes(i.action))
+    && (skip === "states" || !f.states.length || f.states.includes(i.state))
+    && (!q || `${i.title} ${i.repo} #${i.number} ${i.author.login}`.toLowerCase().includes(q));
+}
+const inTab = (tab, skip) => S.items.filter(i => i.tab === tab && match(i, skip));
+function facetCounts(facet) {
+  const key = { accounts: i => i.account, repos: i => i.repo, authors: i => i.author.login, actions: i => i.action, states: i => i.state }[facet];
+  const c = {};
+  inTab(ui.tab, facet).forEach(i => c[key(i)] = (c[key(i)] || 0) + 1);
+  return c;
+}
+function toggleFilter(facet, value) {
+  if (facet === "teams") {
+    ui.teams = pickedTeams();
+    ui.teams = ui.teams.includes(value) ? ui.teams.filter(v => v !== value) : [...ui.teams, value];
+    computePeople(); savePrefs(); return;
+  }
+  const arr = ui.f[facet];
+  const idx = arr.indexOf(value);
+  idx >= 0 ? arr.splice(idx, 1) : arr.push(value);
+  savePrefs();
+}
+const anyFilter = () => FACETS.some(k => ui.f[k].length) || ui.q;
+
+// --- rendering ---------------------------------------------------------
+
+function render() {
+  if (!S) return;
+  computePeople();
+  renderHeader();
+  renderFilters();
+  renderMain();
+  if (ui.dd) renderDDList();
+  renderSettings();
+  tickAgo();
+  applySel();
+  fitAvatars();
+}
+
+// As many avatars as fit in the Reviews / Comments columns (they grow with the window).
+function fitAvatars() {
+  const cols = document.querySelector("#main .line.cols");
+  if (!cols) return;
+  const fit = el => el && el.offsetParent ? Math.max(2, Math.floor((el.clientWidth - 30) / 28)) : 5;
+  const r = fit(cols.children[3]);
+  if (r !== ui.maxR) { ui.maxR = r; renderMain(); tickAgo(); applySel(); }
+}
+
+// Keyboard selection (j/k): a marker on the row, re-applied after every render.
+function visibleRows() { return [...document.querySelectorAll("#main .pr[data-key]")].filter(el => el.offsetParent); }
+function applySel() {
+  document.querySelectorAll(".pr.sel").forEach(el => el.dataset.key !== ui.sel && el.classList.remove("sel"));
+  const el = ui.sel && document.querySelector(`.pr[data-key="${CSS.escape(ui.sel)}"]`);
+  if (el) el.classList.add("sel");
+  return el;
+}
+function moveSel(step) {
+  const rows = visibleRows();
+  if (!rows.length) return;
+  const at = rows.findIndex(el => el.dataset.key === ui.sel);
+  const next = rows[at < 0 ? (step > 0 ? 0 : rows.length - 1) : Math.min(rows.length - 1, Math.max(0, at + step))];
+  ui.sel = next.dataset.key;
+  applySel();
+  next.scrollIntoView({ block: "nearest" });
+}
+function onShortcut(e) {
+  const el = applySel();
+  if (e.key === "j" || e.key === "ArrowDown") return moveSel(1);
+  if (e.key === "k" || e.key === "ArrowUp") return moveSel(-1);
+  if (!el) return false;
+  const item = S.items.find(i => i.key === ui.sel);
+  if (e.key === "Enter") { ui.expanded.has(ui.sel) ? ui.expanded.delete(ui.sel) : ui.expanded.add(ui.sel); return render(); }
+  // Click the title link (the window hands links to the browser; WebKitGTK ignores window.open).
+  if (e.key === "o") return el.querySelector("a.t")?.click();
+  if (e.key === "c") return copyText(item.url);
+  if (item.tab !== "inbox") return false;
+  if (e.key === "e" || e.key === "s") {
+    const rows = visibleRows(), at = rows.indexOf(el);
+    if (e.key === "s") { const b = el.querySelector('[data-do="snooze"]'); return ui.menu === ui.sel ? closeSnooze() : openSnooze(ui.sel, b); }
+    ui.sel = (rows[at + 1] || rows[at - 1])?.dataset.key;  // keep the cursor in place once the row disappears
+    return markPR(item.key, "done");
+  }
+  return false;
+}
+
+function renderHeader() {
+  setHTML(document.getElementById("tabs"), Object.entries(TABS).map(([k, label]) =>
+    `<button data-tab="${k}" class="${ui.tab === k ? "on" : ""}">${label}<span class="n">${inTab(k).length}</span></button>`).join(""));
+  renderConn();
+  setHTML(document.getElementById("bell"), ic(S.notify ? "bell" : "bell-slash"));
+  setHTML(document.getElementById("open-settings"), ic("gear"));
+}
+
+function renderConn() {
+  const el = document.getElementById("sync");
+  let cls, text, tip;
+  const accts = S ? activeAccounts() : [];
+  if (backendDown || !S) {
+    cls = "err"; text = "App disconnected";
+    tip = "The local PR Inbox server is not responding. Close and reopen the app.";
+  } else if (!accts.length) {
+    cls = "warn"; text = "No active accounts"; tip = "Enable or add an account in Settings";
+  } else {
+    const failed = accts.filter(a => a.error);
+    const oldest = accts.map(a => a.last_sync || "").sort()[0];
+    const staleMs = Date.now() - new Date(oldest || 0);
+    tip = accts.map(a => {
+      const rate = ["core", "graphql"].filter(k => a.rate?.[k]).map(k => `${k === "core" ? "REST" : "GraphQL"} ${a.rate[k].remaining}/${a.rate[k].limit}`).join(" · ");
+      return `${a.error ? "✗" : "✓"} ${a.label} (${a.login}): ${a.error ? a.error : `synced ${a.last_sync ? fmt(a.last_sync) : "never"}`}${!a.error && a.failures ? ` · retrying after: ${a.last_failure}` : ""}${rate ? " · quota " + rate : ""}`;
+    }).concat([`Syncs every ${S.poll}s · click to sync now · details in Settings`]).join("\n");
+    const n = accts.length > 1 ? ` (${accts.length} accounts)` : "";
+    if (failed.length) {
+      cls = "err";
+      text = failed.length === accts.length ? (/token|auth|401|expired/i.test(failed[0].error) ? "GitHub: session expired" : "GitHub: error")
+        : `GitHub: error in ${failed.map(a => a.label).join(", ")}`;
+    }
+    else if (S.syncing && !oldest) { cls = "syncing"; text = "Connecting to GitHub…"; }
+    else if (staleMs > S.poll * 3000) { cls = "warn"; text = `GitHub: not synced for ${ago(oldest)}`; }
+    else { cls = S.syncing ? "syncing" : "ok"; text = S.syncing ? "Syncing…" : `Synced ${ago(oldest) === "now" ? "just now" : ago(oldest) + " ago"}${n}`; }
+  }
+  el.className = "conn " + cls;
+  el.title = tip;
+  setHTML(el, `<span class="dot"></span><span class="txt">${esc(text)}</span>`);
+}
+
+// --- settings: accounts, APIs and quotas ---------------------------------
+
+const settings = { open: false, gh: [], armed: null, busy: false, msg: "" };
+async function openSettings() {
+  settings.open = true; settings.armed = null; settings.msg = "";
+  document.getElementById("settings").classList.remove("hidden");
+  document.getElementById("backdrop").classList.remove("hidden");
+  renderSettings();
+  try { settings.gh = (await api("/api/accounts/available")).gh; } catch { settings.gh = []; }
+  try { S = await api("/api/accounts/rates", {}); lastPayload = ""; render(); } catch {}
+  renderSettings();
+}
+function closeSettings() {
+  settings.open = false;
+  document.getElementById("settings").classList.add("hidden");
+  document.getElementById("backdrop").classList.add("hidden");
+}
+function quota(r) {
+  if (!r) return `<span class="hint">no data yet</span>`;
+  const pct = r.limit ? r.remaining / r.limit : 0;
+  const reset = r.reset ? new Date(r.reset * 1000).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "";
+  return `<span class="bar ${pct < .1 ? "low" : pct < .3 ? "mid" : ""}"><i style="width:${Math.round(pct * 100)}%"></i></span>
+    <b>${r.remaining.toLocaleString("en-GB")}</b> / ${r.limit.toLocaleString("en-GB")} left${reset ? ` · resets at ${reset}` : ""}`;
+}
+function renderSettings() {
+  if (!settings.open || !S) return;
+  const body = document.getElementById("settings-body");
+  if (body.contains(document.activeElement) && document.activeElement.matches("input[type=text], input[type=password]")) return;  // don't clobber typing
+  const cards = S.accounts.map(a => `<div class="card acct-card" style="--acc:${esc(a.color)}" data-acct="${esc(a.id)}">
+      <div class="acct-row">
+        <input type="color" value="${esc(a.color)}" data-acct-color title="Account color">
+        <input type="text" value="${esc(a.label)}" data-acct-label maxlength="30" size="14" title="Short name shown on the PRs">
+        <span class="who-l">${esc(a.login)} · ${esc(a.host)}</span>
+        <span class="spacer"></span>
+        <label class="hint"><input type="checkbox" data-acct-enabled ${a.enabled ? "checked" : ""}> Enabled</label>
+        <button class="btn danger ${settings.armed === a.id ? "armed" : ""}" data-acct-remove>${settings.armed === a.id ? "Sure? Remove" : "Remove"}</button>
+      </div>
+      <div class="status-l ${a.error ? "err" : ""}">${!a.enabled ? `${ic("skip", "mut")} Disabled: not synced and its PRs are hidden`
+        : a.error ? `${ic("x-circle-fill", "bad")} ${esc(a.error)}` : a.syncing ? `${ic("sync", "mut")} Syncing…` : `${ic("check-circle-fill", "ok")} Connected · last sync ${a.last_sync ? fmt(a.last_sync) : "pending"}`}</div>
+      <div class="hint">Token: ${a.source === "gh"
+        ? `from the GitHub CLI (<code>gh auth token --user ${esc(a.login)}</code>); the app does not store it`
+        : "personal token stored in the GNOME keyring"}${a.scopes ? ` · scopes: ${esc(a.scopes.join(", "))}` : ""}</div>
+      <table class="api">
+        <tr><th>API</th><th>Endpoint</th><th>Hourly quota</th></tr>
+        <tr><td>REST</td><td><code>${esc(a.endpoints.rest)}</code></td><td>${quota(a.rate?.core)}</td></tr>
+        <tr><td>GraphQL</td><td><code>${esc(a.endpoints.graphql)}</code></td><td>${quota(a.rate?.graphql)}</td></tr>
+      </table>
+    </div>`).join("");
+  const ghList = settings.gh.length
+    ? settings.gh.map(g => `<div class="acct-row"><span>${ic("key", "mut")} <b>${esc(g.login)}</b> <span class="who-l">${esc(g.host)}</span></span>
+        <span class="spacer"></span><button class="btn primary" data-add-gh="${esc(g.host)}|${esc(g.login)}">Add</button></div>`).join("")
+    : `<div class="hint">No more accounts in <code>gh</code>. To add another one, run <code>gh auth login</code> in a terminal (it supports several) and reopen Settings.</div>`;
+  const teams = [...new Map((S.teams || []).map(t => [`${t.org}/${t.slug}`, t])).entries()];
+  setHTML(body, `
+    <div class="sect"><h3>Desktop notifications</h3>
+      <div class="card">
+        <label class="acct-row"><input type="checkbox" data-notify ${S.notify ? "checked" : ""}> Enabled <span class="m">(also with the bell button)</span></label>
+        <div class="hint">Notify me when a PR needs one of these actions (pushes alone don't notify again) or when someone comments on it, even if it is snoozed:</div>
+        <div class="notify-grid">${Object.entries(S.notify_labels).map(([k, label]) => `<label><input type="checkbox" data-notify-action="${k}"
+          ${S.notify_actions.includes(k) ? "checked" : ""} ${S.notify ? "" : "disabled"}> ${ACTIONS[k]?.icon ?? ic("comment")} ${esc(label)}</label>`).join("")}</div>
+        <label class="acct-row"><input type="checkbox" data-quiet="enabled" ${S.quiet.enabled ? "checked" : ""}> Quiet hours from
+          <input type="time" data-quiet="from" value="${esc(S.quiet.from)}"> to <input type="time" data-quiet="to" value="${esc(S.quiet.to)}"></label>
+        <label class="acct-row"><input type="checkbox" data-quiet="weekends" ${S.quiet.weekends ? "checked" : ""} ${S.quiet.enabled ? "" : "disabled"}> Also quiet all weekend</label>
+        <div class="hint">${S.quiet.enabled && S.quiet_now ? `${ic("moon", "mut")} Quiet hours are on right now. ` : ""}Anything arriving during quiet hours is not notified later, but it stays in the Inbox and in the dock counter.</div>
+      </div>
+    </div>
+    <div class="sect"><h3>Appearance</h3>
+      <div class="card">
+        <div class="theme-pick">${Object.entries(THEMES).map(([k, t]) => `<label><input type="radio" name="theme" data-theme-pick="${k}"
+          ${ui.theme === k ? "checked" : ""}> ${ic(t.icon, "mut")} ${t.label}</label>`).join("")}</div>
+      </div>
+      <div class="card">
+        <span class="legend"><span><span class="sw" style="background:var(--accent)"></span>you</span>
+          <span><span class="sw" style="background:var(--green)"></span>your team</span>
+          <span><span class="sw" style="background:var(--purple)"></span>AI</span><span>BOT tag: other bots</span></span>
+        <div class="hint">Avatar rings. Teams highlighted in green (by default the ones with 30 people or fewer):</div>
+        <div class="team-list">${teams.map(([v, t]) => `<label title="${esc(t.name)}"><input type="checkbox" data-team="${esc(v)}"
+          ${pickedTeams().includes(v) ? "checked" : ""}> <span><span class="hint">${esc(t.org)}/</span>${esc(t.slug)}</span><span class="n">${t.size} people</span></label>`).join("")
+          || `<span class="hint">You are not in any GitHub team</span>`}</div>
+      </div>
+    </div>
+    <div class="sect"><h3>GitHub accounts</h3>
+      <div style="display:flex;flex-direction:column;gap:10px">${cards}</div>
+      <p class="hint">With several active accounts, each PR gets a stripe and a tag in its account color, and the Account filter appears.
+        If two accounts see the same PR, it shows once per account.</p>
+    </div>
+    <div class="sect"><h3>Add account</h3>
+      <div class="card"><b>From the GitHub CLI (recommended)</b>${ghList}</div>
+      <div class="card"><b>With a personal token</b>
+        <div class="form-grid">
+          <span>Server</span><input type="text" id="tok-host" value="github.com" placeholder="github.com or your GitHub Enterprise">
+          <span>Name</span><input type="text" id="tok-label" placeholder="e.g. Personal" maxlength="30">
+          <span>Token</span><input type="password" id="tok-token" placeholder="ghp_…" autocomplete="off">
+        </div>
+        <div class="hint">Create a <i>classic</i> token in GitHub → Settings → Developer settings with the <code>repo</code>, <code>read:org</code> and <code>notifications</code> scopes
+          (<i>fine-grained</i> tokens cannot read notifications). It is stored in the GNOME keyring, never in app files.</div>
+        <div class="acct-row"><span class="spacer"></span><button class="btn primary" data-add-token ${settings.busy ? "disabled" : ""}>${settings.busy ? "Checking…" : "Add with token"}</button></div>
+      </div>
+      ${settings.msg ? `<div class="status-l err">${esc(settings.msg)}</div>` : ""}
+    </div>
+    <div class="sect"><h3>Keyboard shortcuts</h3>
+      <div class="card hint kbd-help"><span><kbd>j</kbd>/<kbd>k</kbd> move</span><span><kbd>Enter</kbd> expand</span>
+        <span><kbd>o</kbd> open in browser</span><span><kbd>c</kbd> copy link</span><span><kbd>e</kbd> done</span>
+        <span><kbd>s</kbd> snooze</span><span><kbd>/</kbd> search</span><span><kbd>Esc</kbd> close</span></div>
+    </div>
+    <details class="sect adv" data-adv ${ui.advOpen ? "open" : ""}><summary>Advanced: sync and API quotas</summary>
+      <div class="card" style="margin-top:8px">
+        <div class="form-grid sync-grid">
+          <span>Show</span><span><input type="number" data-sync="days" min="${S.limits.days[0]}" max="${S.limits.days[1]}" value="${S.days}"> days of activity</span>
+          <span>Sync every</span><span><input type="number" data-sync="poll" min="${S.limits.poll[0]}" max="${S.limits.poll[1]}" step="30" value="${S.poll}"> seconds</span>
+        </div>
+        <div class="hint" id="quota-est">${quotaEstimate(S.poll)}</div>
+        <div class="hint">More days keep more PRs in the list, so each sync has more to check and spends more quota.
+          A shorter interval brings news sooner and spends more; a longer one spends less.
+          Each sync only re-reads the PRs that changed, and every ${S.full_refresh / 60} min all of them are read in full.</div>
+        <div class="hint">GitHub limits each account to 5,000 REST requests and 5,000 GraphQL points per hour.
+          <b>REST</b> reads notifications (no quota is spent when nothing changed) and marks PRs done or muted.
+          <b>GraphQL</b> searches your PRs and reads their details and your teams.
+          The quota is shared with anything else using the same token (for example <code>gh</code>).
+          Per PR the app reads up to 40 review threads, 60 comments and 100 checks; each search returns up to 100 PRs.</div>
+      </div>
+      <div class="card"><b>PR Inbox ${esc(S.version)}</b>
+        <div class="hint">To update, run <code>git pull</code> in <code>${esc(S.app_dir)}</code>, then close and reopen the app
+          (with the backend at login, log out and back in). <code>./install.sh --check</code> checks the requirements.</div>
+      </div>
+    </details>
+`);
+}
+// Hourly GraphQL spend per account at a given interval, from what the last light and full syncs really cost.
+function quotaEstimate(poll) {
+  const perHour = 3600 / poll, fulls = Math.min(perHour, 3600 / S.full_refresh), lights = perHour - fulls;
+  const parts = activeAccounts().map(a => {
+    const full = a.cost?.full ?? a.cost?.light, light = a.cost?.light ?? full;
+    if (full == null) return null;
+    const est = Math.round(fulls * full + lights * light);
+    return `<b>${esc(a.label)}</b> ≈ ${est.toLocaleString("en-GB")} points/hour (${Math.round(est / 50)}% of 5,000)`;
+  }).filter(Boolean);
+  return parts.length ? `At this interval, GraphQL quota (measured on the last syncs): ${parts.join(" · ")}`
+    : "The quota estimate appears after the first syncs.";
+}
+async function settingsPost(path, body, okMsg) {
+  try { S = await api(path, body); lastPayload = ""; settings.msg = ""; render(); if (okMsg) toast(okMsg); }
+  catch (e) { settings.msg = e.message; }
+  renderSettings();
+}
+
+function toast(msg, ms = 2500, action, icon) {
+  const el = document.getElementById("toast");
+  el.innerHTML = (icon ? ic(icon) + " " : "") + esc(msg) + (action ? `<button data-toast-action>${esc(action.label)}</button>` : "");
+  el._run = action?.run;
+  el.classList.add("show");
+  clearTimeout(el._t); el._t = setTimeout(() => { el.classList.remove("show"); el._run = null; }, ms);
+}
+function copyText(text) {
+  // Synchronous copy inside the click (works in WebKitGTK); async Clipboard API as a fallback.
+  let ok = false;
+  try {
+    const ta = Object.assign(document.createElement("textarea"), { value: text });
+    ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select(); ok = document.execCommand("copy"); ta.remove();
+  } catch {}
+  if (ok) return toast("Link copied", 2500, null, "link");
+  const timeout = new Promise((_, rej) => setTimeout(rej, 1500));
+  Promise.race([navigator.clipboard.writeText(text), timeout])
+    .then(() => toast("Link copied", 2500, null, "link"), () => toast("Could not copy the link", 2500, null, "alert"));
+}
+// Opening a link brings the browser to the front and hides the toast; show it again when you come back.
+let openedAt = 0;
+window.addEventListener("focus", () => { if (Date.now() - openedAt < 60000) { openedAt = 0; toast("The link opened in the browser", 2500, null, "link-external"); } });
+
+function renderFilters() {
+  // Fixed-width buttons; the selection shows inside (ellipsised) plus a count badge, so nothing moves while you pick.
+  const ddBtn = (name, icon, label) => {
+    const sel = ui.f[name];
+    const one = v => name === "authors" ? authorLabel(v) : name === "states" ? STATES[v]
+      : name === "actions" ? ACTIONS[v].label : name === "accounts" ? acctOf(v).label : v.split("/").pop();
+    const txt = sel.length ? sel.map(one).join(", ") : "all";
+    return `<button class="chip dd-btn ${sel.length ? "active" : ""}" data-dd="${name}" title="${esc(label)}: ${esc(txt)}">
+      <span class="txt">${ic(icon, "mut")} ${label}: ${esc(txt)}</span>${sel.length ? `<span class="cnt">${sel.length}</span>` : ""}<span class="caret">▾</span></button>`;
+  };
+  setHTML(document.getElementById("filters"),
+    (multi() ? ddBtn("accounts", "id-badge", "Account") : "") + ddBtn("actions", "checklist", "Action") + ddBtn("states", "git-pull-request", "State") + ddBtn("repos", "repo", "Repos") + ddBtn("authors", "person", "Authors") +
+    `<button class="clear ${anyFilter() ? "" : "hidden"}" data-clear>Clear filters</button>`);
+}
+
+const LATER = new Set(["waiting", "fyi"]);  // nothing for you to do now (also left out of the dock counter)
+function repoGroups(items) {
+  // Same repo seen from two accounts = two groups, so nobody mixes them up.
+  const groups = {};
+  items.forEach(i => (groups[multi() ? `${i.account}|${i.repo}` : i.repo] ||= []).push(i));
+  return Object.entries(groups).map(([gid, prs]) => {
+    prs.sort((a, b) => a.priority - b.priority || b.activity.localeCompare(a.activity));
+    return { gid, repo: prs[0].repo, account: prs[0].account, prs, prio: prs[0].priority,
+             last: prs.reduce((m, p) => p.activity > m ? p.activity : m, "") };
+  }).sort((a, b) => a.prio - b.prio || b.last.localeCompare(a.last)).map(g => {
+    const [org, name] = g.repo.split("/");
+    const top = g.prs[0].action;
+    return `<details class="repo" data-repo="${esc(g.gid)}" style="--acc:${esc(acctOf(g.account).color)}" ${ui.collapsed.has(g.gid) ? "" : "open"}>
+      <summary>${multi() ? acctBadge(g.account) : ""}<span><span class="org">${esc(org)}/</span>${esc(name)}</span>
+        <span class="cnt">${g.prs.length} PR${g.prs.length > 1 ? "s" : ""}</span>
+        ${!LATER.has(top) ? `<span class="act ${top}">${ACTIONS[top].icon} ${ACTIONS[top].label}</span>` : ""}
+      </summary>
+      ${g.prs.map(prRow).join("")}
+    </details>`;
+  }).join("");
+}
+
+// No account yet (gh missing or not signed in): say how to connect one; the backend picks it up on its own.
+function onboarding() {
+  return `<div class="empty"><div class="onboard"><h2>Connect your GitHub account</h2>
+    <ol><li>Install the GitHub CLI if you don't have it: <code>sudo apt install gh</code></li>
+      <li>Sign in from a terminal: <code>gh auth login</code></li>
+      <li>That's it: PR Inbox finds the account on its own within ${S.poll} s. You can also add it, or a personal token, in
+        <button class="clear" data-open-settings>Settings</button>.</li></ol>
+    <div class="m">Something else missing? Run <code>./install.sh --check</code> in <code>${esc(S.app_dir)}</code>.</div></div></div>`;
+}
+function renderMain() {
+  const main = document.getElementById("main");
+  const items = inTab(ui.tab);
+  main.classList.toggle("multi", multi());
+  const total = S.items.filter(i => i.tab === ui.tab).length;
+  const hidden = total - items.length;
+  // What the app looks at (so a PR you expected isn't silently missing), filters hiding PRs, and the main shortcuts.
+  const foot = (withHidden) => `<div class="scope-note">${withHidden && hidden && anyFilter()
+      ? `${hidden} PR${hidden > 1 ? "s" : ""} hidden by filters · <button class="clear" data-clear>Clear filters</button><br>` : ""}
+    Showing PRs with activity in the last ${S.days} days, plus your open PRs, pending review requests and PRs you reviewed<br>
+    <kbd>j</kbd>/<kbd>k</kbd> move · <kbd>Enter</kbd> details · <kbd>o</kbd> open · <kbd>e</kbd> done · <kbd>s</kbd> snooze</div>`;
+
+  if (!S.accounts.length) return setHTML(main, onboarding());
+  // A failing account stays visible above the list (its PRs keep the data of the last good sync).
+  const banner = activeAccounts().filter(a => a.error).map(a => `<div class="banner">${ic("alert", "bad")}<div>
+      <b>${esc(a.label)}</b> (${esc(a.login)} · ${esc(a.host)}): ${esc(a.error)}
+      <div class="m">The list shows the data from the last successful sync. <button class="clear" data-open-settings>Open Settings</button></div></div></div>`).join("");
+  if (!items.length) {
+    return setHTML(main, banner + `<div class="empty">${total && anyFilter() ? `No PR matches the filters (${total} hidden) · <button class="clear" data-clear>Clear filters</button>`
+      : ui.tab === "inbox" ? `${ic("check-circle", "ok big")} Nothing pending here` : "Empty"}</div>${foot(false)}`);
+  }
+  const cols = `<div class="line cols"><span>Action</span><span>Pull request</span><span class="c-author">Author</span>
+      <span>Reviews &amp; comments</span><span>Pipeline</span><span>Activity</span><span></span></div>`;
+  if (ui.tab !== "inbox") return setHTML(main, banner + cols + repoGroups(items) + foot(true));
+
+  const now = items.filter(i => !LATER.has(i.action)), later = items.filter(i => LATER.has(i.action));
+  setHTML(main, banner + cols
+    + `<div class="block-h">Your turn <span class="n">${now.length}</span></div>`
+    + (now.length ? repoGroups(now) : `<div class="allclear">${ic("check-circle", "ok")} Nothing needs you right now</div>`)
+    + (later.length ? `<details class="block" data-block ${ui.laterOpen ? "open" : ""}>
+        <summary class="block-h">Waiting &amp; FYI <span class="n">${later.length}</span></summary>${repoGroups(later)}</details>` : "")
+    + foot(true));
+}
+
+// Repo / author picker: a floating panel, rendered separately so ticking a box doesn't rebuild (and re-scroll) it.
+function openDD(name, btn) {
+  ui.dd = name; ui.ddq = "";
+  const panel = document.getElementById("ddpanel");
+  placeDD();
+  const search = ["states", "actions", "accounts"].includes(name) ? "" : `<input type="search" id="ddq" placeholder="${name === "repos" ? "Filter repos…" : "Filter authors…"}">`;
+  panel.style.width = name === "states" ? "240px" : name === "actions" ? "260px" : "";
+  panel.innerHTML = `${search}
+    <div class="dd-actions"><span id="ddsum"></span><span><button data-dd-all>Select visible</button> · <button data-dd-none>Show all</button></span></div>
+    <div class="dd-list" id="ddlist"></div>`;
+  panel._html = null;
+  panel.classList.add("show");
+  renderDDList();
+  panel.querySelector("#ddq")?.focus();
+}
+function placeDD() {
+  const btn = document.querySelector(`[data-dd="${ui.dd}"]`), panel = document.getElementById("ddpanel");
+  if (!btn) return;
+  const r = btn.getBoundingClientRect();
+  panel.style.left = Math.max(8, Math.min(r.left, innerWidth - 330)) + "px";
+  panel.style.top = (r.bottom + 4) + "px";
+  panel.style.maxHeight = Math.max(200, Math.min(460, innerHeight - r.bottom - 16)) + "px";
+}
+function closeDD() { ui.dd = null; document.getElementById("ddpanel").classList.remove("show"); }
+function ddOptions() {
+  const name = ui.dd;
+  const counts = facetCounts(name);
+  if (name === "states") return Object.keys(STATES).map(v => ({ v, n: counts[v] || 0, on: ui.f.states.includes(v) }));
+  if (name === "actions") return Object.keys(ACTIONS).map(v => ({ v, n: counts[v] || 0, on: ui.f.actions.includes(v) }));
+  if (name === "accounts") return activeAccounts().map(a => ({ v: a.id, n: counts[a.id] || 0, on: ui.f.accounts.includes(a.id) }));
+  const all = new Set([...S.items.map(i => name === "repos" ? i.repo : i.author.login), ...ui.f[name]]);
+  const q = ui.ddq.toLowerCase();
+  return [...all].filter(v => !q || v.toLowerCase().includes(q) || (name === "authors" && S.mes.includes(v) && "you".includes(q)))
+    .map(v => ({ v, n: counts[v] || 0, on: ui.f[name].includes(v) }))
+    .sort((a, b) => (name === "authors" && S.mes.includes(b.v) - S.mes.includes(a.v)) || b.on - a.on || b.n - a.n || a.v.localeCompare(b.v));
+}
+function renderDDList() {
+  const opts = ddOptions(), name = ui.dd;
+  setHTML(document.getElementById("ddlist"), opts.map(o => {
+    let label;
+    if (name === "states") label = `<span class="state ${o.v}">${STATES[o.v]}</span>`;
+    else if (name === "accounts") label = `${acctBadge(o.v)}<span class="lbl org">${esc(acctOf(o.v).login)}</span>`;
+    else if (name === "actions") label = `<span class="act ${o.v}">${ACTIONS[o.v].icon} ${ACTIONS[o.v].label}</span>`;
+    else if (name === "repos") { const [org, r] = o.v.split("/"); label = `<span class="lbl"><span class="org">${esc(org)}/</span>${esc(r)}</span>`; }
+    else { const it = S.items.find(i => i.author.login === o.v); label = `${av(it?.author.avatar, o.v)}<span class="lbl">${esc(authorLabel(o.v))}</span>`; }
+    return `<label><input type="checkbox" data-ddv="${esc(o.v)}" ${o.on ? "checked" : ""}>${label}<span class="n">${o.n}</span></label>`;
+  }).join("") || `<div class="dd-actions">No results</div>`);
+  document.getElementById("ddsum").textContent = ui.f[name].length ? `${ui.f[name].length} selected` : "Showing all";
+}
+
+function prRow(i) {
+  const a = ACTIONS[i.action];
+  const MAXR = ui.maxR, ppl = people(i);
+  const revs = ppl.slice(0, MAXR).map(p => p.team
+      ? `<span class="team" title="Team ${esc(p.login)}: review pending">@${esc(p.login)}</span>`
+      : `<span class="rv">${av(p.avatar, p.login, personSummary(p))}<span class="badges">${badges(p)}</span></span>`).join("")
+    + (ppl.length > MAXR ? `<span class="more">+${ppl.length - MAXR}</span>` : "");
+  const ci = i.ci.state;
+  const ciText = { SUCCESS: "OK", FAILURE: "Failing", ERROR: "Error", PENDING: "Running", EXPECTED: "Waiting" }[ci] || "—";
+  const ciLinked = i.ci.failing.length ? i.ci.failing : i.ci.running;
+  const ciLink = ciLinked.find(c => c.url)?.url;
+  const ciHtml = `<span class="dot ${ci || "none"}"></span>${ciLink ? `<a href="${esc(ciLink)}" target="_blank" title="${esc(ciLinked.map(c => c.name).join(", "))}">${ciText}</a>` : ciText}`;
+  const open = ui.expanded.has(i.key);
+  return `<div class="pr ${ui.menu === i.key ? "menu-on" : ""}" data-key="${esc(i.key)}" style="--acc:${esc(acctOf(i.account).color)}">
+    <div class="line">
+      <span class="act ${i.action}" title="${esc(i.why || "")}${i.review_since ? ` · Requested: ${esc(fmt(i.review_since))}` : ""}">${a.icon} ${a.label}${reviewAge(i)}</span>
+      <div class="title">
+        <span class="unread ${i.unread ? "" : "no"}" title="${i.unread ? "Unread notification" : ""}"></span>
+        ${i.state !== "OPEN" ? `<span class="state ${i.state}">${STATES[i.state]}</span>` : ""}
+        <a class="t" href="${esc(i.url)}" target="_blank" title="${esc(i.title)}"><span class="num">#${i.number}</span> ${esc(i.title)}</a>
+        ${i.pending_mentions ? `<span class="mention" title="${i.pending_mentions} unanswered mention(s)">${ic("mention")}</span>` : ""}
+        ${i.conflicts ? `<span class="flag conflict" title="Conflicts with the base branch">${ic("alert")} conflicts</span>` : ""}
+        ${i.behind ? `<span class="flag behind" title="The branch is behind the base and the repo requires updating it">${ic("git-branch")} behind</span>` : ""}
+        ${i.open_threads.length ? `<span class="flag thr ${i.threads_waiting ? "" : "calm"}" title="${i.open_threads.length} unresolved review conversation(s)${i.threads_waiting ? `, ${i.threads_waiting} waiting for your reply` : ""}">${ic("comment-discussion")} ${i.threads_waiting || i.open_threads.length}</span>` : ""}
+        ${sizeHtml(i.size)}
+      </div>
+      <div class="who c-author" title="Author">${av(i.author.avatar, i.author.login)}<span>${i.mine ? "<b>you</b>" : esc(i.author.login)}</span></div>
+      <div class="avs">${revs || '<span class="more">nobody yet</span>'}</div>
+      <div class="ci" title="Pipeline: ${ci || "no checks"}">${ciHtml}</div>
+      <span class="ago" data-ago="${esc(i.activity)}" title="Last activity: ${fmt(i.activity)}"></span>
+      <div class="btns">${buttons(i)}</div>
+    </div>
+    ${open ? detail(i) : ""}
+  </div>`;
+}
+
+// Review waiting time on the Review chip; the class changes with the clock so the row re-renders when it crosses a threshold.
+function reviewAge(i) {
+  if (!i.review_since) return "";
+  const h = (Date.now() - new Date(i.review_since)) / 3600e3;
+  return ` <span class="age ${h >= 48 ? "late" : h >= 24 ? "warn" : ""}">· ${h < 1 ? "<1 h" : h < 24 ? Math.floor(h) + " h" : Math.floor(h / 24) + " d"}</span>`;
+}
+function sizeHtml(sz) {
+  if (sz?.additions == null) return "";
+  const k = n => n >= 1000 ? (n / 1000).toFixed(1).replace(".0", "") + "k" : n;
+  const files = sz.files != null ? ` · ${sz.files} file${sz.files === 1 ? "" : "s"}` : "";
+  return `<span class="size" title="${sz.additions} lines added, ${sz.deletions} deleted, ${sz.files} file(s)"><span class="add">+${k(sz.additions)}</span> <span class="del">−${k(sz.deletions)}</span>${files}</span>`;
+}
+
+// Reviewers and commenters as one list of people: you first, then reviews, pending requests, comment-only.
+function people(i) {
+  const map = new Map(i.reviewers.map(r => [r.team ? "team:" + r.login : r.login, { ...r, comments: 0 }]));
+  i.commenters.forEach(c => {
+    const p = map.get(c.login);
+    const extra = { comments: c.count, commentsOutdated: c.outdated, lastComment: c.last };
+    p ? Object.assign(p, extra, { avatar: p.avatar || c.avatar }) : map.set(c.login, { login: c.login, avatar: c.avatar, state: null, ...extra });
+  });
+  const rank = p => S.mes.includes(p.login) ? 0 : p.state && p.state !== "PENDING" ? 1 : p.state === "PENDING" ? 2 : 3;
+  return [...map.values()].sort((a, b) => rank(a) - rank(b));
+}
+// Review icon + comment icon; a faded badge means out of date (review on an older commit / comments before the latest commit).
+function badges(p) {
+  const out = [];
+  if (p.state && p.state !== "COMMENTED") out.push(`<i class="${p.stale ? "faded" : ""}">${REVIEW_ICON[p.state] || "?"}</i>`);
+  if (p.comments || p.state === "COMMENTED") out.push(`<i class="${p.comments && p.commentsOutdated ? "faded" : ""}">${ic("comment", "mut")}</i>`);
+  return out.join("");
+}
+function commentText(p, short) {
+  if (!p.comments) return p.state === "COMMENTED" ? "commented" : "";
+  return `${p.comments} comment${p.comments > 1 ? "s" : ""}${p.commentsOutdated
+    ? short ? " (outdated)" : " (outdated: before the latest commit or on changed code)" : ""}`;
+}
+function personSummary(p) {
+  const parts = [p.state && p.state !== "COMMENTED" ? reviewText(p) : "", commentText(p)].filter(Boolean);
+  return `${personTitle(p.login)}: ${parts.join(" · ")}`;
+}
+
+function reviewText(r) {
+  const base = REVIEW_TEXT[r.state] || r.state;
+  if (r.stale && r.state === "APPROVED") return `${base} on an older commit (re-approval needed)`;
+  if (r.stale && r.state === "CHANGES_REQUESTED") return `${base} · before the latest commits (re-review pending)`;
+  if (r.rerequested) return `${base} · re-review requested (before: ${REVIEW_TEXT[r.prev] || r.prev})`;
+  return base;
+}
+
+function buttons(i) {
+  if (i.tab !== "inbox") {
+    const info = i.tab === "snoozed" ? `until ${fmt(i.mark.until)}` : "";
+    return `<span class="markinfo">${info}</span><button data-do="copy" title="Copy PR link">${ic("link")}</button><button data-do="unmark" title="Back to Inbox">${ic("undo")}</button>`;
+  }
+  return `<button data-do="copy" title="Copy PR link">${ic("link")}</button>
+          <button data-do="done" title="Done (comes back on new activity)">${ic("check")}</button>
+          <button data-do="snooze" title="Snooze">${ic("clock")}</button>
+          <button data-do="mute" title="Mute (also unsubscribes on GitHub)">${ic("bell-slash")}</button>`;
+}
+
+function detail(i) {
+  const reasons = [...new Set(i.threads.map(t => REASONS[t.reason] || t.reason))];
+  const notified = i.threads.length ? `Notified for: ${esc(reasons.join(", "))} · last ${esc(fmt(i.threads[0].updated_at))}`
+    : "Found by search (no GitHub notification)";
+  const mentions = i.mentions.map(m => `<li>${av(m.avatar, m.by)}<div><a href="${esc(m.url)}" target="_blank"><b>${esc(m.by)}</b></a>
+      <span class="m">${fmt(m.at)} ${m.answered ? "· answered" : "· <b>unanswered</b>"}</span><div class="ex">${esc(m.excerpt)}</div></div></li>`).join("");
+  const ppl = people(i).map(p => {
+    const review = p.state && p.state !== "COMMENTED"
+      ? `<span class="${p.stale ? "faded-txt" : ""}">${REVIEW_ICON[p.state] || ""} ${esc(reviewText(p))}</span>` : "";
+    const comm = commentText(p)
+      ? `<span class="${p.commentsOutdated ? "faded-txt" : ""}">${ic("comment", "mut")} ${esc(commentText(p, true))}${p.lastComment ? ` · ${esc(fmt(p.lastComment))}` : ""}</span>` : "";
+    return `<li title="${esc(personSummary(p))}">${p.team ? `<span class="team">@${esc(p.login)}</span>` : av(p.avatar, p.login, personSummary(p))}
+      <span>${S.mes.includes(p.login) ? "<b>you</b>" : esc(p.login)}</span><span class="m">${[review, comm].filter(Boolean).join(" · ")}</span></li>`;
+  }).join("");
+  const merge = (i.conflicts ? `<li class="check"><span>${ic("alert", "bad")}</span><div><a href="${esc(i.url)}#partial-pull-merging" target="_blank">Conflicts with the base branch</a><div class="m">they must be resolved before merging</div></div></li>` : "")
+    + (i.behind ? `<li class="check"><span>${ic("git-branch", "wait")}</span><div><a href="${esc(i.url)}#partial-pull-merging" target="_blank">Branch behind the base</a><div class="m">the repo requires updating it to merge</div></div></li>` : "");
+  const convs = i.open_threads.map(t => `<li>${av(t.avatar, t.by)}<div><a href="${esc(t.url)}" target="_blank"><b>${esc(authorLabel(t.by))}</b></a>
+      <span class="m">${t.path ? `· ${esc(t.path.split("/").pop())}` : ""}${t.outdated ? " · outdated" : ""}</span>
+      <div class="ex">${esc(t.excerpt)}</div>
+      <div class="m">${t.replies ? `${t.replies} repl${t.replies > 1 ? "ies" : "y"} · last from ${esc(authorLabel(t.last_by))}` : "no replies"} · <span data-ago="${esc(t.last_at)}" title="${esc(fmt(t.last_at))}"></span>${t.waiting ? " · <b>waiting for your reply</b>" : ""}</div></div></li>`).join("");
+  const sz = i.size?.additions != null ? `<div class="m">Size: ${sizeHtml(i.size)}</div>` : "";
+  const checks = merge + i.ci.failing.map(c => checkItem(c, ic("x-circle-fill", "bad"), FAIL_TEXT[c.result] || "failed", c.finished)).join("")
+    + i.ci.running.map(c => checkItem(c, ["IN_PROGRESS", "PENDING"].includes(c.result) ? ic("dot-fill", "wait") : ic("clock", "mut"), RUN_TEXT[c.result] || "running", c.started)).join("")
+    + (i.ci.total ? `<li class="m">${i.ci.passed ? `${ic("check-circle-fill", "ok")} ${i.ci.passed} passed · ` : ""}${i.ci.total} checks in total</li>`
+                  : `<li class="m">No checks</li>`);
+  // Most useful first; empty sections are left out.
+  return `<div class="detail">
+    <div class="why">${multi() ? acctBadge(i.account) + " " : ""}<b>${ACTIONS[i.action].icon} ${ACTIONS[i.action].label}:</b> ${esc(i.why || "")}${i.review_since ? ` · <b>Requested:</b> ${esc(fmt(i.review_since))}` : ""}${i.role?.length ? ` · <b>Your role:</b> ${esc(i.role.join(", "))}` : ""}</div>
+    ${convs ? `<div><h4>Unresolved conversations (${i.open_threads.length})</h4><ul>${convs}</ul></div>` : ""}
+    <div><h4>Pipeline</h4><ul>${checks}</ul>${sz}</div>
+    ${ppl ? `<div class="people"><h4>Reviews &amp; comments</h4><ul>${ppl}</ul></div>` : ""}
+    ${mentions ? `<div><h4>Direct mentions</h4><ul>${mentions}</ul></div>` : ""}
+    <div class="notified">${notified}</div>
+  </div>`;
+}
+
+const FAIL_TEXT = { FAILURE: "failed", TIMED_OUT: "timed out", STARTUP_FAILURE: "failed to start", ACTION_REQUIRED: "action required", ERROR: "error" };
+const RUN_TEXT = { IN_PROGRESS: "running", QUEUED: "queued", REQUESTED: "queued", WAITING: "waiting for approval",
+                   PENDING: "running", EXPECTED: "waiting to start" };
+// One failing/running check in the detail: linked name, its workflow and how long ago it failed or started.
+function checkItem(c, icon, text, ts) {
+  const name = c.url ? `<a href="${esc(c.url)}" target="_blank">${esc(c.name)}</a>` : esc(c.name);
+  const when = ts ? ` · <span data-ago="${esc(ts)}" title="${esc(fmt(ts))}"></span>` : "";
+  return `<li class="check"><span>${icon}</span><div>${name}${c.workflow ? ` <span class="m">· ${esc(c.workflow)}</span>` : ""}
+    <div class="m">${text}${when}</div></div></li>`;
+}
+
+function openSnooze(key, btn) {
+  const menu = document.getElementById("snoozemenu");
+  const pad = n => String(n).padStart(2, "0");
+  const d = new Date(Date.now() + 3600e3);
+  const local = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  menu.innerHTML = `<button data-snooze="1h">In 1 hour</button>
+    <button data-snooze="3h">In 3 hours</button>
+    <button data-snooze="tomorrow">Tomorrow at 9:00</button>
+    <button data-snooze="monday">Monday at 9:00</button>
+    <div class="sep"></div>
+    <div class="custom"><input type="datetime-local" id="snooze-at" value="${local}" min="${local.slice(0, 16)}"><button data-snooze-custom>OK</button></div>`;
+  ui.menu = key;
+  btn.closest(".pr")?.classList.add("menu-on");
+  menu.classList.remove("hidden");
+  const r = btn.getBoundingClientRect(), h = menu.offsetHeight, w = menu.offsetWidth;
+  menu.style.left = Math.max(8, Math.min(r.right - w, innerWidth - w - 8)) + "px";
+  menu.style.top = (r.bottom + 4 + h > innerHeight - 8 ? Math.max(8, r.top - 4 - h) : r.bottom + 4) + "px";
+}
+function closeSnooze() {
+  ui.menu = null;
+  document.querySelectorAll(".pr.menu-on").forEach(el => el.classList.remove("menu-on"));
+  document.getElementById("snoozemenu").classList.add("hidden");
+}
+
+function snoozeUntil(kind) {
+  const d = new Date();
+  if (kind === "1h") d.setHours(d.getHours() + 1);
+  else if (kind === "3h") d.setHours(d.getHours() + 3);
+  else {
+    d.setDate(d.getDate() + (kind === "tomorrow" ? 1 : ((8 - d.getDay()) % 7 || 7)));
+    d.setHours(9, 0, 0, 0);
+  }
+  return d;
+}
+const isoZ = d => d.toISOString().replace(/\.\d{3}Z$/, "Z");
+
+// --- events ------------------------------------------------------------
+
+document.addEventListener("click", async e => {
+  const t = e.target;
+  if (t.closest("[data-open-settings]")) return openSettings();
+  if (t.closest("[data-toast-action]")) {
+    const el = document.getElementById("toast"), run = el._run;
+    el.classList.remove("show"); el._run = null;
+    return run?.();
+  }
+  if (t.closest("#open-settings")) return openSettings();
+  if (t.closest("[data-close-settings]") || t.id === "backdrop") return closeSettings();
+  if (t.closest("#settings")) {
+    const card = t.closest("[data-acct]");
+    if (t.closest("[data-acct-remove]")) {
+      if (settings.armed !== card.dataset.acct) { settings.armed = card.dataset.acct; return renderSettings(); }
+      settings.armed = null;
+      return settingsPost("/api/accounts/remove", { id: card.dataset.acct }, "Account removed");
+    }
+    if (settings.armed) { settings.armed = null; renderSettings(); }
+    const gh = t.closest("[data-add-gh]");
+    if (gh) {
+      const [host, login] = gh.dataset.addGh.split("|");
+      settings.gh = settings.gh.filter(g => !(g.host === host && g.login === login));
+      return settingsPost("/api/accounts/add", { source: "gh", host, login }, `Account ${login} added`);
+    }
+    if (t.closest("[data-add-token]")) {
+      const v = id => document.getElementById(id).value.trim();
+      settings.busy = true; renderSettings();
+      const body = { source: "token", host: v("tok-host"), label: v("tok-label"), token: v("tok-token") };
+      settings.busy = false;
+      await settingsPost("/api/accounts/add", body, "Account added");
+      if (!settings.msg) ["tok-token", "tok-label"].forEach(id => document.getElementById(id).value = "");
+      return;
+    }
+    return;
+  }
+  if (t.closest("a[target=_blank]")) { openedAt = Date.now(); toast("↗ Opened in the browser"); return; }
+  if (t.closest("#ddpanel")) {
+    if (t.closest("[data-dd-none]")) { ui.f[ui.dd] = []; savePrefs(); render(); }
+    if (t.closest("[data-dd-all]")) { ui.f[ui.dd] = ddOptions().filter(o => o.n).map(o => o.v); savePrefs(); render(); }
+    return;
+  }
+  const dd = t.closest("[data-dd]");
+  if (dd) { ui.dd === dd.dataset.dd ? closeDD() : openDD(dd.dataset.dd, dd); return; }
+  if (ui.dd) closeDD();
+  const tab = t.closest("[data-tab]");
+  if (tab) { ui.tab = tab.dataset.tab; savePrefs(); return render(); }
+  if (t.closest("[data-clear]")) {
+    FACETS.forEach(k => ui.f[k] = []); savePrefs();
+    ui.q = ""; document.getElementById("q").value = "";
+    return render();
+  }
+  const pr = t.closest(".pr");
+  if (t.closest("#snoozemenu")) {
+    const key = ui.menu, sn = t.closest("[data-snooze]");
+    if (sn) { closeSnooze(); return markPR(key, "snooze", isoZ(snoozeUntil(sn.dataset.snooze))); }
+    if (t.closest("[data-snooze-custom]")) {
+      const v = document.getElementById("snooze-at").value;
+      if (!v || new Date(v) <= new Date()) return toast("Pick a future date");
+      closeSnooze(); return markPR(key, "snooze", isoZ(new Date(v)));
+    }
+    return;
+  }
+  const btn = t.closest("[data-do]");
+  if (btn && pr) {
+    const key = pr.dataset.key, what = btn.dataset.do;
+    if (what === "copy") return copyText(S.items.find(i => i.key === key).url);
+    if (what === "snooze") { ui.menu === key ? closeSnooze() : openSnooze(key, btn); return; }
+    closeSnooze();
+    return what === "unmark" ? post("/api/unmark", { key }) : markPR(key, what);
+  }
+  if (ui.menu) closeSnooze();
+  const line = t.closest(".line");
+  if (line && pr && !line.classList.contains("cols")) {
+    const key = pr.dataset.key;
+    // A click selects the row while its detail is open; closing it lets go (the buttons hide again).
+    if (ui.expanded.has(key)) { ui.expanded.delete(key); if (ui.sel === key) ui.sel = null; }
+    else { ui.expanded.add(key); ui.sel = key; }
+    render();
+  }
+});
+document.addEventListener("change", e => {
+  const t = e.target;
+  const card = t.closest?.("[data-acct]");
+  if (card && t.matches("[data-acct-enabled]")) return settingsPost("/api/accounts/update", { id: card.dataset.acct, enabled: t.checked });
+  if (card && t.matches("[data-acct-color]")) return settingsPost("/api/accounts/update", { id: card.dataset.acct, color: t.value });
+  if (card && t.matches("[data-acct-label]") && t.value.trim()) { t.blur(); return settingsPost("/api/accounts/update", { id: card.dataset.acct, label: t.value.trim() }); }
+  if (t.matches("[data-notify]")) return settingsPost("/api/settings", { notify: t.checked });
+  if (t.matches("[data-sync]")) {
+    const k = t.dataset.sync, [lo, hi] = S.limits[k], v = Math.round(+t.value);
+    if (!(v >= lo && v <= hi)) { t.value = S[k]; return toast(`Choose between ${lo} and ${hi}`, 3000, null, "alert"); }
+    return settingsPost("/api/settings", { [k]: v }, k === "days" ? `Showing ${v} days: reading them now` : `Syncing every ${v} s`);
+  }
+  if (t.matches("[data-theme-pick]")) { ui.theme = t.dataset.themePick; applyTheme(); return savePrefs(); }
+  if (t.matches("[data-team]")) { toggleFilter("teams", t.dataset.team); renderMain(); tickAgo(); return renderSettings(); }
+  if (t.matches("[data-notify-action]")) {
+    const sel = [...document.querySelectorAll("[data-notify-action]:checked")].map(x => x.dataset.notifyAction);
+    return settingsPost("/api/settings", { notify_actions: sel });
+  }
+  if (t.matches("[data-quiet]")) {
+    const k = t.dataset.quiet;
+    if (t.type === "time" && !t.value) return;
+    return settingsPost("/api/settings", { quiet: { [k]: t.type === "checkbox" ? t.checked : t.value } });
+  }
+  if (t.matches("[data-ddv]")) {
+    toggleFilter(ui.dd, t.dataset.ddv);
+    renderHeader(); renderFilters(); renderMain(); tickAgo(); placeDD();
+    document.getElementById("ddsum").textContent = ui.f[ui.dd].length ? `${ui.f[ui.dd].length} selected` : "Showing all";
+    return;
+  }
+});
+document.addEventListener("input", e => {
+  if (e.target.id === "ddq") { ui.ddq = e.target.value; renderDDList(); }
+  if (e.target.id === "q") { ui.q = e.target.value; render(); }
+  if (e.target.dataset?.sync === "poll" && +e.target.value >= S.limits.poll[0])  // live estimate while typing
+    document.getElementById("quota-est").innerHTML = quotaEstimate(+e.target.value);
+});
+document.addEventListener("toggle", e => {
+  if (e.target.dataset?.block !== undefined) { ui.laterOpen = e.target.open; return savePrefs(); }
+  if (e.target.dataset?.adv !== undefined) { ui.advOpen = e.target.open; return; }
+  const repo = e.target.dataset?.repo;
+  if (!repo) return;
+  e.target.open ? ui.collapsed.delete(repo) : ui.collapsed.add(repo);
+  savePrefs();
+}, true);
+document.getElementById("sync").addEventListener("click", async () => {
+  await post("/api/sync", {});
+  setTimeout(load, 1500);
+});
+document.getElementById("bell").addEventListener("click", () => post("/api/settings", { notify: !S.notify }));
+document.addEventListener("keydown", e => {
+  const typing = ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName)
+    || (e.key === "Enter" && ["BUTTON", "A", "SUMMARY"].includes(document.activeElement.tagName));
+  if (e.key === "/" && !typing) { e.preventDefault(); document.getElementById("q").focus(); }
+  if (!typing && !settings.open && !ui.dd && !e.ctrlKey && !e.metaKey && !e.altKey && S
+      && ["j", "k", "ArrowDown", "ArrowUp", "Enter", "o", "c", "e", "s"].includes(e.key)) {
+    if (ui.menu && e.key !== "s") closeSnooze();
+    if (onShortcut(e) !== false) e.preventDefault();
+  }
+  if (e.key === "Escape") { if (settings.open) return closeSettings(); closeDD(); closeSnooze(); render(); }
+});
+window.addEventListener("resize", () => { ui.dd && placeDD(); closeSnooze(); fitAvatars(); });
+document.addEventListener("scroll", e => { if (ui.menu && !e.target.closest?.("#snoozemenu")) closeSnooze(); }, true);
+
+applyTheme();
+(async () => {
+  try { applyPrefs(await api("/api/prefs")); } catch { applyPrefs(ls.get("prefs", null)); }
+  await load();
+})();
+setInterval(() => { if (!ui.menu && !ui.dd) load(); }, 15000);
+setInterval(() => { tickAgo(); if (S) renderHeader(); }, 30000);
+setInterval(() => { if (ui.menu || ui.dd) load(); }, 60000);  // keep the connection status honest while a menu is open
+</script>
+</body>
+</html>

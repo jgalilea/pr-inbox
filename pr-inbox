@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Launch the PR Inbox window (starts the backend if it isn't already running).
+DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+LOG="${XDG_STATE_HOME:-$HOME/.local/state}/pr-inbox.log"
+umask 077  # the log and the state DB may contain private repo names and PR titles
+mkdir -p "$(dirname "$LOG")"
+exec python3 "$DIR/app.py" "$@" >>"$LOG" 2>&1

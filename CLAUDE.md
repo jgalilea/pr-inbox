@@ -11,6 +11,7 @@ PR Inbox is a desktop app for Ubuntu GNOME. It groups the user's GitHub PR notif
   - `gh`-sourced tokens are fetched from `gh auth token` on demand (`accounts.py`).
   - Personal access tokens live only in the GNOME keyring (via `secret-tool`).
 - **Git:** the repo is public at `jgalilea/pr-inbox`, with `main` as the default branch. `.github/workflows/tests.yml` runs the tests in CI. There is no linter; tests are stdlib `unittest` (see below).
+- **Releases:** the tag is `v<VERSION>`, and each release carries a `pr-inbox.tar.gz` asset made with `git archive --prefix=pr-inbox/`, under that exact name because the README's install command downloads it from `releases/latest`. `.gitattributes` keeps `docs/` and `.github/` out of the archive.
 - **Version:** `VERSION` in `server.py` is shown in Settings, and `/api/ping` returns it. `app.py` warns if the running backend is a different version, which happens when an autostart backend runs old code. Bump it on user-visible changes.
 - **Local API hardening (keep it when adding endpoints):**
   - every request must carry `Host` 127.0.0.1/localhost:<port> and, if present, a matching `Origin` (blocks DNS rebinding and cross-site requests);

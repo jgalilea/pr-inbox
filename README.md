@@ -1,17 +1,67 @@
-# PR Inbox
+<div align="center">
+  <img src="static/icon.svg" alt="PR Inbox icon" width="96">
+  <h1>PR Inbox</h1>
+  <p><strong>Your GitHub pull requests, sorted by what you need to do next.</strong></p>
+  <p>A native desktop inbox for Ubuntu GNOME. It groups notifications by PR and PRs by repo, and shows the action that is up to you.</p>
+  <p>
+    <a href="https://github.com/jgalilea/pr-inbox/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/jgalilea/pr-inbox"></a>
+    <a href="https://github.com/jgalilea/pr-inbox/actions/workflows/tests.yml"><img alt="Tests" src="https://github.com/jgalilea/pr-inbox/actions/workflows/tests.yml/badge.svg"></a>
+    <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/github/license/jgalilea/pr-inbox"></a>
+    <img alt="No dependencies: Python stdlib only" src="https://img.shields.io/badge/dependencies-none-brightgreen">
+  </p>
+  <p><a href="#install"><strong>Install</strong></a> · <a href="#usage">Usage</a> · <a href="#settings-and-multiple-accounts">Settings</a> · <a href="#security-and-privacy">Security</a> · <a href="https://github.com/jgalilea/pr-inbox/releases/latest">Download</a></p>
+</div>
 
-A desktop inbox for the GitHub PRs you take part in: it groups notifications by PR and PRs by repo, and shows the action that is up to you.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/inbox-dark.png">
+  <img src="docs/screenshots/inbox-light.png" alt="The PR Inbox window, with pull requests grouped by repo and labelled with the next action">
+</picture>
+
+<p align="center"><sub>Screenshots use fictional data.</sub></p>
+
+## Why PR Inbox
+
+GitHub's notification list tells you that something happened. PR Inbox tells you what to do about it: review this one, fix CI on that one, and merge the third.
+
+- **One clear next action per PR**: review, address changes, fix conflicts, fix CI, reply, ask for re-approval, update the branch or merge.
+- **"Your turn" comes first**: what needs you is on top, and everything else stays folded in Waiting & FYI.
+- **The full picture on one row**: reviews, comments, CI, conflicts and PR size, with the details one click away.
+- **Desktop integration**: a dock counter, desktop notifications and quiet hours, and light and dark themes that follow Ubuntu.
+- **Several accounts**: mix work and personal accounts, including GitHub Enterprise, each with its own color.
+- **Fast triage**: mark PRs done, snooze or mute them, filter them and move around with the keyboard.
+- **Private by design**: no telemetry and no third parties. Your data stays on your machine, and the only network traffic is to GitHub.
+- **No dependencies**: Python 3 (stdlib) plus the system's WebKitGTK. It uses your `gh` accounts or personal tokens stored in the GNOME keyring.
 
 It shows the PRs that had activity in the last 14 days (adjustable), plus:
 - your open PRs;
 - PRs with your review pending;
 - PRs you reviewed, even if nobody asked you to.
 
-No dependencies: Python 3 (stdlib) plus the system's WebKitGTK. It uses your `gh` accounts or personal tokens stored in the GNOME keyring.
-
 ## Install
 
 Requirements: Ubuntu 22.04 or newer with GNOME, and a GitHub account signed in with the GitHub CLI (`gh auth login`) or a personal token.
+
+**Option 1: download the latest release**
+
+```bash
+curl -fsSL https://github.com/jgalilea/pr-inbox/releases/latest/download/pr-inbox.tar.gz | tar xz
+cd pr-inbox
+./install.sh
+```
+
+You can also get it from the [releases page](https://github.com/jgalilea/pr-inbox/releases/latest).
+
+**Option 2: clone the repo**, which makes updating a `git pull`:
+
+```bash
+git clone https://github.com/jgalilea/pr-inbox.git
+cd pr-inbox
+./install.sh
+```
+
+Either way, keep the folder where it is: the launcher points to it. Then search for "PR Inbox" in Activities, and right click → Pin to Dock.
+
+`install.sh` also takes these options:
 
 ```bash
 ./install.sh --check      # only checks the requirements and prints the `sudo apt install …` line for what is missing
@@ -29,13 +79,25 @@ If the app starts with no account, it explains how to connect one and picks up a
 
 ## Updating
 
+If you cloned the repo, run this in the PR Inbox folder:
+
 ```bash
-git pull   # in the PR Inbox folder
+git pull
 ```
+
+If you downloaded a release, run this in the folder that contains `pr-inbox`:
+
+```bash
+curl -fsSL https://github.com/jgalilea/pr-inbox/releases/latest/download/pr-inbox.tar.gz | tar xz
+```
+
+Your data lives outside that folder, so updating doesn't touch it.
 
 Then close and reopen the app. With `--autostart`, log out and back in too: the app warns if the backend that is running is an older version. The version is shown in Settings → Advanced.
 
 ## Usage
+
+### What each action means
 
 Icons are GitHub's own [Octicons](https://primer.style/octicons) (MIT), embedded in the page.
 
@@ -53,9 +115,13 @@ Icons are GitHub's own [Octicons](https://primer.style/octicons) (MIT), embedded
 | Waiting (hourglass) | Your PR is waiting for reviews or CI |
 | FYI (info) | Everything else (merged, closed, activity with no action) |
 
+### The Inbox
+
 The Inbox has two blocks:
 - **Your turn**: the PRs that need something from you, the same ones the dock counts.
 - **Waiting & FYI**: folded by default; the rest.
+
+### Done, snooze and mute
 
 For each PR (the buttons appear when you point at the row or select it with the keyboard; a toast lets you **Undo** for a few seconds):
 - **Done** (check): hides it until there is new activity and marks its notifications as read on GitHub.
@@ -63,30 +129,49 @@ For each PR (the buttons appear when you point at the row or select it with the 
 - **Mute** (crossed bell): hides it for good and unsubscribes from the thread on GitHub, so the emails stop.
 - **Undo arrow**: in the Snoozed, Done or Muted tabs, moves the PR back to the Inbox.
 
-**Filters** (they combine and are remembered between sessions):
+### Filters
+
+Filters combine and are remembered between sessions:
 - **Action**, **State**, **Repos** and **Authors**: fixed-width checkbox dropdowns, so nothing moves while you pick. Repos and authors have a search box. With nothing ticked, everything is shown.
 - Each filter's counts take the other active filters into account. "Clear filters" removes them all.
 - Filters, the active tab and collapsed repos are saved in the local database, so they survive closing the app or rebooting.
 - When filters hide PRs, a line under the list says how many, with a link to clear them.
 
-**On each row**, next to the title:
+### On each row
+
+Next to the title:
 - "conflicts" and "behind": state of the branch against the base (on any open PR).
 - Conversation icon + N: unresolved review conversations. Highlighted in orange when any is waiting for your reply.
 - +added −deleted · N files: PR size.
 
-**Dock counter**: the icon shows how many Inbox PRs pass your filters (the dropdowns; the search box doesn't count) and need something from you, i.e. all but Waiting and FYI. It updates every 5 s while the app is open. Desktop notifications follow the same filters: PRs they hide don't notify.
+### Dock counter
 
-**Keyboard shortcuts**: `j`/`k` (or the arrows) to move, `Enter` to expand, `o` to open in the browser, `c` to copy the link, `e` to mark done, `s` to snooze, `/` to search and `Esc` to close.
+The icon shows how many Inbox PRs pass your filters (the dropdowns; the search box doesn't count) and need something from you, i.e. all but Waiting and FYI. It updates every 5 s while the app is open. Desktop notifications follow the same filters: PRs they hide don't notify.
 
-**Avatars** are highlighted everywhere (author, reviews, comments, detail):
+### Keyboard shortcuts
+
+| Key | Does |
+|---|---|
+| `j` / `k` (or the arrows) | Move |
+| `Enter` | Expand |
+| `o` | Open in the browser |
+| `c` | Copy the link |
+| `e` | Mark done |
+| `s` | Snooze |
+| `/` | Search |
+| `Esc` | Close |
+
+### Avatars
+
+Avatars are highlighted everywhere (author, reviews, comments, detail):
 - Blue ring: you.
 - Green ring: your GitHub team. In Settings → Appearance you choose which teams count; by default, those with 30 people or fewer.
 - Purple ring with an "AI" tag: AI accounts (claude, copilot, depthfirst, coderabbit…).
 - "BOT" tag: other bots (dependabot, etc.).
 
-Opening a link shows a discreet notice at the bottom right, "The link opened in the browser".
+### Reviews & comments
 
-**Reviews & comments**: one avatar per person, you first. Under each avatar:
+One avatar per person, you first. Under each avatar:
 - the review state: green check (approved), red diff (changes requested), amber dot (pending);
 - a comment bubble if they commented.
 
@@ -96,15 +181,26 @@ A **faded** badge is out of date:
 
 The tooltip and the detail spell it out.
 
-**Connection**: the indicator at the top right shows whether GitHub responds.
+### Connection
+
+The indicator at the top right shows whether GitHub responds.
 - Green: connected.
 - Amber: more than 3 cycles without syncing.
 - Red: GitHub error, expired session (`gh auth login`) or backend down.
 - The tooltip shows the last sync and the remaining API quota. Click to sync right away.
 
-The **link** button copies the PR link to the clipboard.
+The **link** button copies the PR link to the clipboard. Opening a link shows a discreet notice at the bottom right, "The link opened in the browser".
 
-**Theme**: in Settings → Appearance, choose Automatic (follows Ubuntu's light or dark mode, also when you switch it live), Light or Dark.
+### Theme
+
+In Settings → Appearance, choose Automatic (follows Ubuntu's light or dark mode, also when you switch it live), Light or Dark.
+
+### PR detail
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/detail-dark.png">
+  <img src="docs/screenshots/detail-light.png" alt="An expanded pull request showing why it needs action, unresolved conversations, pipeline checks and reviews">
+</picture>
 
 Clicking a row expands the detail. Empty sections are hidden. It shows, in this order:
 1. why the PR has its action;
@@ -119,6 +215,11 @@ Clicking a row expands the detail. Empty sections are hidden. It shows, in this 
 - Links open in your browser.
 
 ## Settings and multiple accounts
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/settings-dark.png">
+  <img src="docs/screenshots/settings-light.png" alt="Settings panel with two GitHub accounts, their API endpoints and quota">
+</picture>
 
 The gear button opens the settings:
 - **GitHub accounts**: for each account you see its name, color, whether it is enabled, where the token comes from, the REST and GraphQL API endpoints and the quota left on each. The only account can't be removed: add the new one first. If you rename your GitHub account, the app picks up the new name by itself within 10 minutes.
@@ -201,9 +302,15 @@ These files are only readable by your user. The local server only answers its ow
 
 The secret is created automatically; there is nothing to set up. Opening `http://127.0.0.1:8787` in a normal browser only shows "Open PR Inbox from its launcher".
 
+## Development
+
 Debugging and tests:
 
 ```bash
 python3 server.py --once --dump         # syncs once and prints the classified PRs as JSON
 python3 -m unittest discover -s tests   # test suite (no network)
 ```
+
+## License
+
+[MIT](LICENSE). Embedded third-party icons are listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
